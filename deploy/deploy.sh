@@ -43,8 +43,14 @@ mkdir "$release" "$backup"
 tar -xzf "$incoming/release.tar.gz" -C "$release"
 [[ "$(cat "$release/RELEASE")" == "$sha" ]]
 [[ -f "$release/frontend/dist/index.html" ]]
-python3 -m venv "$release/.venv"
-"$release/.venv/bin/python" -m pip install --disable-pip-version-check -r "$release/backend/requirements.txt"
+# Ubuntu can provide venv without ensurepip. Bootstrap from CI's pip wheel,
+# leaving the system Python packages untouched and installing offline.
+python3 -m venv --without-pip "$release/.venv"
+pip_wheels=("$release"/wheels/pip-*.whl)
+[[ ${#pip_wheels[@]} == 1 && -f "${pip_wheels[0]}" ]]
+PYTHONPATH="${pip_wheels[0]}" "$release/.venv/bin/python" -m pip install \
+  --disable-pip-version-check --no-index --find-links "$release/wheels" \
+  pip -r "$release/backend/requirements.txt"
 printf 'APP_VERSION=%s\n' "$sha" > "$release/release.env"
 
 previous=$(readlink -f "$base/current" || true)

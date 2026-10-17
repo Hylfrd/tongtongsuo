@@ -60,7 +60,7 @@ jobs:
           python -m pytest -q
       - name: Check deployment scripts
         run: |
-          bash -n deploy/deploy.sh deploy/inspect.sh
+          for script in deploy/*.sh; do bash -n "$script"; done
           shellcheck deploy/deploy.sh deploy/inspect.sh
       - name: Package release
         run: |

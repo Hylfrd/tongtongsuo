@@ -14,7 +14,9 @@ for command in python3 python3.13 python3.12 caddy nginx systemctl curl; do
   command -v "$command" || true
 done
 python3 --version
-python3 -m venv --help >/dev/null 2>&1 && printf 'venv module: available\n' || true
+if python3 -m venv --help >/dev/null 2>&1; then
+  printf 'venv module: available\n'
+fi
 systemctl is-active caddy nginx tongtongsuo 2>/dev/null || true
 printf '\nListening TCP sockets:\n'
 ss -ltnp

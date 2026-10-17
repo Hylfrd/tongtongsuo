@@ -62,14 +62,15 @@ jobs:
         run: |
           for script in deploy/*.sh; do bash -n "$script"; done
           shellcheck deploy/deploy.sh deploy/inspect.sh
-      - name: Download Python wheels for the matching Linux runtime
+      - name: Resolve Python wheels for the matching Linux runtime
         run: |
-          python -m pip download --only-binary=:all: --dest wheels pip -r backend/requirements.txt
+          python -m pip install --dry-run --ignore-installed --only-binary=:all: --report wheel-report.json pip -r backend/requirements.txt
+          python deploy/wheels.py prepare wheel-report.json wheel-manifest.json
       - name: Package release
         run: |
           mkdir -p bundle
           printf '%s\n' "$GITHUB_SHA" > RELEASE
-          tar --exclude='__pycache__' --exclude='*.pyc' -czf bundle/release.tar.gz RELEASE frontend/dist backend/app backend/requirements.txt deploy wheels
+          tar --exclude='__pycache__' --exclude='*.pyc' -czf bundle/release.tar.gz RELEASE frontend/dist backend/app backend/requirements.txt deploy wheel-manifest.json
           cp deploy/deploy.sh bundle/deploy.sh
       - uses: actions/upload-artifact@v4
         with:

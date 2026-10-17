@@ -95,7 +95,7 @@ npm run build
 ```
 
 - 后端由 systemd 的独立动态非 root 用户运行，只监听 `127.0.0.1:18731`。
-- CI 使用与服务器匹配的 Linux/Python 3.12 下载二进制依赖包并随发布上传。服务器用 `venv --without-pip` 创建隔离环境，再从包内引导 pip 并离线安装；不依赖系统 `ensurepip`，不修改系统 Python 包。
+- CI 使用与服务器匹配的 Linux/Python 3.12 解析依赖，随代码上传 wheel URL 与 SHA-256 清单。服务器从 PyPI 官方 CDN 下载这些指定文件、逐一校验哈希，再用 `venv --without-pip` 创建隔离环境，从已校验的 pip wheel 引导并本地安装。不依赖系统 `ensurepip`，不修改系统 Python 包；避免通过 SSH 反复上传大体积依赖。服务器需能访问 `files.pythonhosted.org`。
 - 在既有 `/etc/caddy/Caddyfile` 末尾添加本项目配置的精确 `import`；独立配置仅声明 `bnbu.hmcl-helper.cn`。保留其他站点与服务，先备份并验证配置，再平滑 reload Caddy。
 - Caddy 负责 HTTPS；域名 DNS 必须指向服务器，80/443 应保持可访问。
 - 部署验证本机 API、前端页面和公网 HTTPS API 的提交版本；激活阶段失败时恢复此前应用版本、本项目 unit 和 Caddy 配置。

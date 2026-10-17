@@ -43,8 +43,10 @@ mkdir "$release" "$backup"
 tar -xzf "$incoming/release.tar.gz" -C "$release"
 [[ "$(cat "$release/RELEASE")" == "$sha" ]]
 [[ -f "$release/frontend/dist/index.html" ]]
-# Ubuntu can provide venv without ensurepip. Bootstrap from CI's pip wheel,
-# leaving the system Python packages untouched and installing offline.
+# Fetch exactly the wheels selected by CI, verifying their published checksums.
+python3 "$release/deploy/wheels.py" download "$release/wheel-manifest.json" "$release/wheels"
+# Ubuntu can provide venv without ensurepip. Bootstrap from the verified pip
+# wheel, leaving system Python untouched and installing from the local wheel set.
 python3 -m venv --without-pip "$release/.venv"
 pip_wheels=("$release"/wheels/pip-*.whl)
 [[ ${#pip_wheels[@]} == 1 && -f "${pip_wheels[0]}" ]]

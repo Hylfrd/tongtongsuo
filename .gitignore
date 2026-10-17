@@ -1,0 +1,15 @@
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+secrets/
+
+# Local API responses, logs, and temporary files
+runtime/
+tmp/
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -53,7 +53,14 @@ PYTHONPATH="${pip_wheels[0]}" "$release/.venv/bin/python" -m pip install \
   pip -r "$release/backend/requirements.txt"
 printf 'APP_VERSION=%s\n' "$sha" > "$release/release.env"
 
-previous=$(readlink -f "$base/current" || true)
+previous=''
+if [[ -L "$base/current" ]]; then
+  previous=$(readlink -f "$base/current")
+  [[ -d "$previous" && "$previous" == "$base/releases/"* ]] || {
+    echo 'Current release does not point to a managed release directory.'
+    exit 1
+  }
+fi
 was_active=false
 systemctl is-active --quiet tongtongsuo && was_active=true
 was_enabled=false

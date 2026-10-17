@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>校园柜锁</title>
+  </head>
+  <body>
+    <main>
+      <header><span class="label">校园柜锁</span><span class="label">建设中</span></header>
+      <h1>扫码入口已就绪</h1>
+      <p class="intro">学生身份认证和开锁功能正在接入，当前页面暂不提供开锁服务。</p>
+      <section aria-labelledby="entry-heading">
+        <h2 id="entry-heading">当前入口</h2>
+        <p id="entry">请通过柜锁上的二维码进入。</p>
+        <p class="note">二维码只用于定位柜锁，不代表开锁权限。</p>
+      </section>
+      <section aria-labelledby="status-heading">
+        <h2 id="status-heading">服务状态</h2>
+        <dl>
+          <div><dt>后台连接</dt><dd id="connection">检查中…</dd></div>
+          <div><dt>学生身份认证</dt><dd>尚未开放</dd></div>
+          <div><dt>远程开锁</dt><dd>尚未开放</dd></div>
+        </dl>
+        <p id="status-message" role="status" aria-live="polite">正在检查后台服务。</p>
+        <button id="retry" type="button" disabled>重新检查</button>
+      </section>
+      <footer>后续流程：扫码 → 学校身份认证 → 授权核验 → 记录与开锁</footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

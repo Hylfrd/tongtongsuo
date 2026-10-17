@@ -2,8 +2,7 @@
 set -eu
 
 printf 'OS: '
-. /etc/os-release
-printf '%s\n' "$PRETTY_NAME"
+sed -n 's/^PRETTY_NAME=//p' /etc/os-release
 printf 'Current uid: '
 id -u
 if [ "$(id -u)" -eq 0 ] || sudo -n true 2>/dev/null; then

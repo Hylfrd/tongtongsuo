@@ -1,22 +1,27 @@
 name: CI and deploy
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       inspect_only:
         description: Inspect the existing server without deploying
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: tongtongsuo-production
+  group: tongtongsuo-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   inspect:
+    if: github.event_name == 'workflow_dispatch' && inputs.inspect_only
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -28,3 +33,75 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           script_path: deploy/inspect.sh
+
+  build:
+    if: github.event_name != 'workflow_dispatch' || !inputs.inspect_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - name: Check backend
+        working-directory: backend
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pytest -q
+      - name: Check deployment scripts
+        run: |
+          bash -n deploy/deploy.sh deploy/inspect.sh
+          shellcheck deploy/deploy.sh deploy/inspect.sh
+      - name: Package release
+        run: |
+          mkdir -p bundle
+          printf '%s\n' "$GITHUB_SHA" > RELEASE
+          tar --exclude='__pycache__' --exclude='*.pyc' -czf bundle/release.tar.gz RELEASE frontend/dist backend/app backend/requirements.txt deploy
+          cp deploy/deploy.sh bundle/deploy.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: bundle/
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: bundle
+      - name: Upload release to its own directory
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: bundle/*
+          target: /var/www/tongtongsuo/incoming/${{ github.run_id }}-${{ github.run_attempt }}
+          strip_components: 1
+      - name: Activate release and verify HTTPS
+        uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          DEPLOY_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: RELEASE_SHA,DEPLOY_RUN
+          command_timeout: 12m
+          script: bash "/var/www/tongtongsuo/incoming/$DEPLOY_RUN/deploy.sh" "$RELEASE_SHA" "$DEPLOY_RUN"

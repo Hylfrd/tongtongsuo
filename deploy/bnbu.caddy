@@ -1,0 +1,4 @@
+# Managed by the tongtongsuo repository; this file owns only this hostname.
+bnbu.hmcl-helper.cn {
+    reverse_proxy 127.0.0.1:18731
+}

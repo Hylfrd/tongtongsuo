@@ -1,0 +1,22 @@
+[Unit]
+Description=Tongtongsuo web and API
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/var/www/tongtongsuo/current/backend
+EnvironmentFile=/var/www/tongtongsuo/current/release.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/var/www/tongtongsuo/current/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 18731 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

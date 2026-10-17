@@ -80,6 +80,8 @@ npm run build
 
 `.github/workflows/ci.yml` 在 PR 时执行前端构建、后端测试和 ShellCheck；推送 `main` 时，通过检查后上传同一构建产物并部署。可手动运行；勾选 `inspect_only` 时只读取服务器状态，不部署。部署串行执行，不中断正在切换的发布。
 
+文件传输使用 Runner 的 OpenSSH `scp` 与 `sshpass`（密码经环境变量传入），沿用上述 SSH 凭据；整个上传有 180 秒超时，避免旧 SCP action 的传输等待无法受 `command_timeout` 限制。首次连接记录服务器主机密钥，同次运行后续连接校验该密钥。
+
 服务器布局：
 
 ```text

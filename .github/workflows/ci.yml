@@ -63,7 +63,8 @@ jobs:
           for script in deploy/*.sh; do bash -n "$script"; done
           shellcheck deploy/deploy.sh deploy/inspect.sh
       - name: Download Python wheels for the matching Linux runtime
-        run: python -m pip download --only-binary=:all: --dest wheels pip -r backend/requirements.txt
+        run: |
+          python -m pip download --only-binary=:all: --dest wheels pip -r backend/requirements.txt
       - name: Package release
         run: |
           mkdir -p bundle

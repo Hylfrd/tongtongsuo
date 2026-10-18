@@ -41,7 +41,8 @@ def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -
     def status() -> dict[str, str]:
         return {"authentication": "school_account", "lock_control": "not_configured"}
 
-    auth = AuthManager()
+    db_path = Path(db_path or os.environ.get("DATABASE_PATH", "runtime/tongtongsuo.sqlite3"))
+    auth = AuthManager(db_path=db_path)
     application.add_middleware(AdminBodyLimitMiddleware)
     application.include_router(auth.router)
     application.include_router(create_admin_router(auth.require_admin, db_path))

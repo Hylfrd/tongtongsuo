@@ -22,7 +22,7 @@ input::placeholder { color:#657b83; }
 * { scrollbar-width:thin; scrollbar-color:#abc8ce transparent; }
 .student-app { height:100svh; height:100dvh; display:grid; grid-template-rows:auto minmax(0,1fr) auto; overflow:clip; position:relative; isolation:isolate; background:linear-gradient(126deg,transparent 71%,#dce8f3 71%),linear-gradient(145deg,#dceef0 29%,#f8faf7 29%); }
 .student-app::before { content:''; position:absolute; inset:auto auto -170px -180px; width:440px; height:440px; background:#edf0da; border-radius:44%; opacity:.7; transform:rotate(-16deg); z-index:-1; pointer-events:none; }
-.student-app::after { content:''; position:absolute; right:3%; top:18%; width:150px; height:150px; background:url('./assets/flower.png') center/contain no-repeat; opacity:.08; transform:rotate(12deg); z-index:-1; pointer-events:none; }
+.student-app::after { content:''; position:absolute; right:-3%; top:17%; width:min(43vw,560px); aspect-ratio:1; background:#788891; mask:url('./assets/zheng-watermark.png') center/contain no-repeat; opacity:.12; transform:rotate(-8deg); z-index:-1; pointer-events:none; }
 .site-header { width:min(1080px,100%); margin:auto; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .brand { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:700; text-decoration:none; min-width:0; }
 .brand img { width:36px; height:36px; object-fit:contain; }
@@ -127,6 +127,7 @@ input::placeholder { color:#657b83; }
 .unlock-copy p { color:var(--muted); font-size:14px; margin-top:7px; }
 .unlock-actions { display:grid; gap:10px; margin-top:24px; }
 .phone-preview { width:min(430px,100%); margin-inline:auto; border-inline:1px solid var(--line); }
+.phone-preview::after { width:210px; right:-65px; top:18%; opacity:.1; }
 .phone-preview .site-header { padding:12px 16px; }
 .phone-preview .brand { font-size:12px; gap:7px; }
 .phone-preview .brand img { width:28px; height:28px; }
@@ -150,6 +151,7 @@ input::placeholder { color:#657b83; }
 .phone-preview .unlock-copy { text-align:center; width:100%; }
 .phone-preview .cabinet-visual { width:130px; height:168px; }
 @media(max-width:600px) {
+  .student-app::after { width:210px; right:-65px; top:18%; opacity:.1; }
   .site-header { padding:12px 16px; gap:8px; }
   .brand { font-size:12px; gap:7px; }
   .brand img { width:28px; height:28px; }

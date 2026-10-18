@@ -51,5 +51,11 @@
     "source": "https://github.com/google/fonts/tree/main/ofl/zcoolkuaile",
     "family": "ZCOOL KuaiLe",
     "license": "SIL Open Font License 1.1; see OFL.txt"
+  },
+  "zheng-watermark.png": {
+    "kind": "provided residence artwork",
+    "source": "正雅苑/用电安全检查上门/temp/00_优先使用素材/04_正字_蓝色_透明底_675.png; residence booklet 正字 mark",
+    "rights": "Residence artwork supplied by the project maintainer; original rights retained.",
+    "rendering": "Original transparent raster used as a muted gray-blue CSS mask; no generated replacement."
   }
 }

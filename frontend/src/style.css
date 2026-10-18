@@ -288,3 +288,18 @@ input::placeholder { color:#657b83; }
 .admin-mobile-notice .page-tools { margin-bottom:0; }
 .admin-access-message { flex:1; display:grid; place-items:center; min-height:0; text-align:center; }
 .admin-access-message h1 { margin:0; font-size:20px; line-height:1.6; font-weight:500; }
+
+/* The third field stays reachable without shrinking the illustrated scene. */
+.roster-login-layout .login-hint { margin-bottom:18px; }
+.roster-name-help { margin:-4px 0 15px; color:var(--muted); font-size:12px; line-height:1.5; }
+.roster-login-return { margin-top:8px; min-height:44px; padding-left:0; }
+.login-mode-error p { margin:16px 0; color:var(--muted); }
+@container(max-width:720px) {
+  .page-content > .roster-login-layout { flex:1 0 auto; }
+  .roster-login-layout { gap:14px; }
+  .roster-login-layout .login-illustration { flex:1 0 180px; max-height:240px; }
+  .roster-login-layout .login-hint { margin-bottom:12px; }
+  .roster-login-layout .field { margin-bottom:10px; }
+  .roster-login-layout .field input { min-height:44px; padding-block:9px; }
+  .roster-login-layout .roster-name-help { margin:-2px 0 10px; }
+}

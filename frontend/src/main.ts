@@ -16,9 +16,11 @@ type Identity = { name: string; school_code: string | null; role?: 'admin' };
 type Cabinet = { id: number; code: string; name: string; group_name: string; location: string };
 type Tool = { id: number; name: string; name_en: string; description: string; description_en: string; unit: string; unit_en: string; icon: string; icon_data: string | null; available_quantity: number };
 type Loan = { id: number; tool_id: number; tool_name: string; tool_name_en: string; quantity: number; borrowed_at: string; unit: string; unit_en: string; icon: string; icon_data: string | null };
+type LoginMode = 'sso' | 'roster';
 type View = 'loading' | 'scan' | 'login' | 'home' | 'borrow' | 'return' | 'unlock' | 'success';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const preview = location.pathname !== '/admin' && new URLSearchParams(location.search).get('preview') === '1';
+const previewLoginMode = preview && import.meta.env.DEV && ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('loginMode') === 'roster';
 const mobile = /^\/m(?:\/|$)/.test(location.pathname);
 const adminPath = location.pathname === '/admin';
 const mobileAdmin = (): boolean => mobile || (adminPath && new URLSearchParams(location.search).get('mobile') === '1') || matchMedia('(max-width:760px)').matches || /Android|iPhone|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -33,6 +35,7 @@ let selected = new Map<number, number>(), quantities = new Map<number, number>()
 let disposeAmbient: (() => void) | undefined;
 let busy = false, opening = false, previewOpened = false, adminMounted = false;
 let listError = false, listLoading = false;
+let loginMode: LoginMode | null = null, adminLogin = adminPath;
 let loginBlockedUntil = 0;
 let cooldownTimer: ReturnType<typeof setInterval> | undefined;
 let demoTimer: ReturnType<typeof setTimeout> | undefined;
@@ -104,9 +107,32 @@ function toolArt(tool: {icon: string; icon_data: string | null}): string {
   return dataImage(tool.icon_data) ? `<img src="${esc(tool.icon_data)}" alt="">` : tool.icon === 'screwdriver' ? `<img src="${screwdriver}" alt="">` : icon(symbols[tool.icon] ?? 'toolbox');
 }
 function heading(title: string): string { return `<div class="workspace-heading"><button class="back-button" data-action="home" aria-label="${t('back')}">${icon('back')}</button><h1 tabindex="-1">${esc(title)}</h1></div>`; }
+function rosterLogin(): boolean { return loginMode === 'roster' && !adminLogin; }
 function loginContent(): string {
-  return `<section class="login-layout">${illustration()}<div class="login-panel"><div class="panel-heading"><h1 tabindex="-1">${t('login')}</h1>${languageButton()}</div><p class="login-hint">${t('loginHint')}</p>${!preview ? `<form id="login-form" method="post" novalidate><fieldset ${busy ? 'disabled' : ''}><div class="field"><label for="username">${t('username')}</label><div class="input-wrap">${icon('user')}<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="${t('accountHint')}" required></div></div><div class="field"><label for="password">${t('password')}</label><div class="input-wrap">${icon('key')}<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" placeholder="${t('passwordHint')}" required></div></div><button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
+  const roster = rosterLogin();
+  const fields = roster ? `
+    <div class="field"><label for="name">${t('fullName')}</label><div class="input-wrap">${icon('user')}<input id="name" name="name" autocomplete="name" autocapitalize="characters" spellcheck="false" maxlength="128" placeholder="${t('nameHint')}" ${language === 'en' ? 'aria-describedby="roster-name-help"' : ''} required></div></div>
+    ${language === 'en' ? `<p class="roster-name-help" id="roster-name-help">${t('internationalNameHint')}</p>` : ''}
+    <div class="field"><label for="school_code">${t('schoolCode')}</label><div class="input-wrap">${icon('user')}<input id="school_code" name="school_code" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="64" placeholder="${t('schoolCodeHint')}" required></div></div>
+    <div class="field"><label for="room_number">${t('roomNumber')}</label><div class="input-wrap">${icon('key')}<input id="room_number" name="room_number" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64" placeholder="${t('roomNumberHint')}" required></div></div>` : `
+    <div class="field"><label for="username">${t('username')}</label><div class="input-wrap">${icon('user')}<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="${t('accountHint')}" ${adminLogin && !adminPath ? 'value="admin"' : ''} required></div></div>
+    <div class="field"><label for="password">${t('password')}</label><div class="input-wrap">${icon('key')}<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" placeholder="${t('passwordHint')}" required></div></div>`;
+  const form = loginMode || adminPath ? `<p class="login-hint">${t(roster ? 'rosterLoginHint' : adminLogin ? 'adminLoginHint' : 'loginHint')}</p>${!preview || previewLoginMode ? `<form id="login-form" method="post" novalidate><fieldset ${busy ? 'disabled' : ''}>${fields}<button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${adminLogin && !adminPath ? `<button class="text-button roster-login-return" data-action="roster-login">${icon('back')} ${t('memberLogin')}</button>` : ''}` : `<div class="login-mode-error"><p>${t('loginModeFailed')}</p><button class="secondary-button" data-action="retry-login-mode">${t('retry')}</button></div>`;
+  return `<section class="login-layout${roster ? ' roster-login-layout' : ''}">${illustration()}<div class="login-panel"><div class="panel-heading"><h1 tabindex="-1">${t('login')}</h1>${languageButton()}</div>${form}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
 }
+function switchToAdminLogin(): void {
+  adminLogin = true; render();
+  document.querySelector<HTMLInputElement>('#password')?.focus({preventScroll:true});
+}
+async function loadLoginMode(): Promise<void> {
+  loginMode = null;
+  if (adminPath) { loginMode = 'sso'; return; }
+  if (previewLoginMode) { loginMode = 'roster'; return; }
+  const result = await request<{mode:LoginMode}>('/api/auth/mode');
+  if (result.mode !== 'sso' && result.mode !== 'roster') throw new Error(t('loginModeFailed'));
+  loginMode = result.mode;
+}
+
 function scanContent(): string {
   return `<section class="login-layout">${illustration()}<div class="scan-panel"><div class="panel-heading"><h1 tabindex="-1">${t('scan')}</h1>${languageButton()}</div>${logoutButton()}<p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button></div></section>`;
 }
@@ -159,11 +185,20 @@ function render(): void {
   app.querySelector('.license-link')!.setAttribute('href', licenseHref(licenseSource()));
   const loginForm = document.querySelector<HTMLFormElement>('#login-form');
   loginForm?.addEventListener('submit', event => void login(event));
-  loginForm?.addEventListener('input', event => { if (event.target instanceof HTMLInputElement) clearFieldError(event.target); });
+  loginForm?.addEventListener('input', event => {
+    if (event.target instanceof HTMLInputElement) { event.target.setCustomValidity(''); clearFieldError(event.target); }
+  });
+  const nameInput = loginForm?.querySelector<HTMLInputElement>('#name');
+  nameInput?.addEventListener('blur', () => {
+    if (!busy && nameInput.value.trim().toLowerCase() === 'admin') switchToAdminLogin();
+  });
+  nameInput?.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && nameInput.value.trim().toLowerCase() === 'admin') { event.preventDefault(); switchToAdminLogin(); }
+  });
   for (const kind of ['copy', 'cut', 'paste', 'drop', 'dragstart']) loginForm?.addEventListener(kind, event => {
     if (!(event.target instanceof HTMLInputElement)) return;
     event.preventDefault();
-    if (kind === 'paste' || kind === 'drop') showToast(language === 'zh' ? '请手动输入账号和密码。' : 'Please type your account and password.', 'info');
+    if (kind === 'paste' || kind === 'drop') showToast(t('typeLoginDetails'), 'info');
   });
   updateSelection(); updateLoginButton();
 }
@@ -199,21 +234,28 @@ function updateLoginButton(): void {
 }
 async function login(event: Event): Promise<void> {
   event.preventDefault();
-  if (busy || preview || Date.now() < loginBlockedUntil) return;
-  const username = document.querySelector<HTMLInputElement>('#username')!;
-  const password = document.querySelector<HTMLInputElement>('#password')!;
-  if (!validateForm(event.currentTarget as HTMLFormElement)) return;
+  if (busy || preview || Date.now() < loginBlockedUntil || (!loginMode && !adminPath)) return;
+  const form = event.currentTarget as HTMLFormElement;
+  const roster = rosterLogin();
+  const value = (name: string): string => (form.elements.namedItem(name) as HTMLInputElement).value.trim();
+  if (roster && value('name').toLowerCase() === 'admin') { switchToAdminLogin(); return; }
+  for (const input of form.querySelectorAll<HTMLInputElement>('input[required]')) {
+    if (input.type !== 'password') input.value = input.value.trim();
+  }
+  if (!validateForm(form)) return;
+  const password = form.querySelector<HTMLInputElement>('#password');
+  const payload = roster ? {name:value('name'),school_code:value('school_code'),room_number:value('room_number')} : {username:value('username'),password:password!.value};
   invalidateRequests();
   const ticket = requestScope.begin();
   setBusy(true);
   try {
-    const response = await fetch('/api/auth/login', {method:'POST', credentials:'same-origin', cache:'no-store', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:username.value.trim(),password:password.value}), signal:AbortSignal.any([ticket.signal,AbortSignal.timeout(45000)])});
+    const response = await fetch('/api/auth/login', {method:'POST', credentials:'same-origin', cache:'no-store', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload), signal:AbortSignal.any([ticket.signal,AbortSignal.timeout(45000)])});
     ticket.check();
-    password.value = '';
+    if (password) password.value = '';
     if (!response.ok) {
       const retry = response.headers.get('Retry-After');
       if (retry && /^\d+$/.test(retry)) { loginBlockedUntil = Date.now() + Math.min(3600, Number(retry)) * 1000; clearInterval(cooldownTimer); cooldownTimer = setInterval(updateLoginButton, 1000); }
-      let message = t('authFailed');
+      let message = t(roster ? 'rosterAuthFailed' : 'authFailed');
       try { const body = await response.json(); if (language === 'zh' && typeof body.detail?.message === 'string') message = body.detail.message; } catch { /* Fallback retained. */ }
       throw new Error(message);
     }
@@ -222,7 +264,7 @@ async function login(event: Event): Promise<void> {
     ticket.check(); user = identity;
     await enterAccount(true);
   } catch (error) { if (ticket.current()) errorToast(error instanceof TypeError || error instanceof DOMException ? new Error(t('network')) : error); }
-  finally { password.value = ''; if (ticket.current()) setBusy(false); ticket.release(); }
+  finally { if (password) password.value = ''; if (ticket.current()) setBusy(false); ticket.release(); }
 }
 async function enterAccount(freshLogin = false): Promise<void> {
   if (shouldOpenAdmin(user?.role, location.pathname, freshLogin) && user) {
@@ -330,10 +372,15 @@ app.addEventListener('click', event => {
   if (!button || button.disabled || busy || opening) return;
   const action = button.dataset.action;
   if (action === 'language') {
-    const username = document.querySelector<HTMLInputElement>('#username')?.value;
+    const draft = [...document.querySelectorAll<HTMLInputElement>('#login-form input')].filter(input => input.type !== 'password').map(input => [input.id, input.value]);
     language = language === 'zh' ? 'en' : 'zh';
-    render(); const input = document.querySelector<HTMLInputElement>('#username'); if (input && username) input.value = username;
+    render();
+    for (const [id,value] of draft) { const input = document.getElementById(id) as HTMLInputElement | null; if (input) input.value = value; }
     document.querySelector<HTMLButtonElement>('.language-button')?.focus();
+  } else if (action === 'roster-login') { adminLogin = false; render(); document.querySelector<HTMLInputElement>('#name')?.focus({preventScroll:true}); }
+  else if (action === 'retry-login-mode') {
+    button.disabled = true;
+    void loadLoginMode().catch(errorToast).finally(() => render());
   } else if (action === 'scan') {
     button.disabled = true;
     void import('./scanner').then(({openCabinetScanner}) => openCabinetScanner(language, path => location.assign(path))).catch(errorToast).finally(() => { button.disabled = false; });
@@ -374,6 +421,8 @@ async function initialize(): Promise<void> {
         else showToast(t('network'), 'error');
       } catch { ticket.check(); showToast(t('network'), 'error'); }
     }
+    ticket.check();
+    try { await loadLoginMode(); } catch (error) { ticket.check(); errorToast(error); }
     ticket.check();
     if (user) await enterAccount(); else move(adminPath || cabinet ? 'login' : 'scan');
     if (adminPath && !user && new URLSearchParams(location.search).get('passwordChanged') === '1') { showToast(t('passwordChanged'), 'success'); history.replaceState(null,'',location.pathname); }

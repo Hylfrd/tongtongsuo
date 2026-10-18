@@ -18,7 +18,7 @@ export function mountLicense(root: HTMLElement): void {
         <div class="license-heading"><h1 id="license-title">开源许可</h1><p>AGPL-3.0 · GNU Affero 通用公共许可证</p></div>
         <iframe class="license-translation" src="https://www.chinasona.org/gnu/agpl-3.0-cn.html" title="AGPL-3.0 简体中文译文" referrerpolicy="no-referrer" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe>
         <p class="license-source"><a href="https://www.chinasona.org/gnu/agpl-3.0-cn.html" target="_blank" rel="noopener noreferrer">打开中文原文 ${icon('arrow')}</a></p>
-        <details class="license-original"><summary><span>完整英文原文</span><span aria-hidden="true">＋</span></summary><pre lang="en" data-license-text></pre></details>
+        <details class="license-original"><summary><span>完整英文原文</span><span aria-hidden="true">＋</span></summary><pre lang="en" data-license-text tabindex="0" role="region" aria-label="AGPL-3.0 English license"></pre></details>
         <footer class="license-end"><a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU 官方原文 ${icon('arrow')}</a><a class="license-return" data-license-return>${icon('back')}<span>返回</span></a></footer>
       </article>
     </main>`;

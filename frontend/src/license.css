@@ -17,7 +17,8 @@
 .license-original summary::-webkit-details-marker { display:none; }
 .license-original summary > span:last-child { transition:transform 300ms; }
 .license-original[open] summary > span:last-child { transform:rotate(45deg); }
-.license-original pre { margin:0 0 24px; padding:20px; background:#f5f8f8; border-radius:10px; white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.8 ui-monospace,Consolas,monospace; color:#3f5661; }
+.license-original pre { height:72dvh; min-height:400px; overflow:auto; scrollbar-gutter:stable; margin:0 0 24px; padding:20px; background:#f5f8f8; border-radius:10px; white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.8 ui-monospace,Consolas,monospace; color:#3f5661; }
+.license-original pre:focus-visible { outline:2px solid #00778e; outline-offset:3px; }
 .license-end { display:flex; justify-content:space-between; align-items:center; gap:16px; padding-top:24px; }
 .license-end > a:first-child { display:inline-flex; align-items:center; gap:8px; font-size:14px; }
 .license-app .icon { width:20px; height:20px; }

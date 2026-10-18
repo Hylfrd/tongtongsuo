@@ -21,3 +21,6 @@ dist/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Local progress notes
+/progress.md

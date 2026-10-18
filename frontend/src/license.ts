@@ -22,10 +22,10 @@ export function mountLicense(root: HTMLElement): void {
         <a class="license-return" data-license-return>${icon('back')}<span>返回</span></a>
       </header>
       <article class="license-paper" aria-labelledby="license-title">
-        <div class="license-heading"><p class="license-eyebrow">AGPL-3.0</p><h1 id="license-title">开源许可</h1><p>GNU Affero 通用公共许可证 · 第 3 版</p></div>
+        <div class="license-heading"><h1 id="license-title">开源许可</h1><p>AGPL-3.0 · GNU Affero 通用公共许可证</p></div>
         <div class="license-intro"><p>以下为中文导读，帮助你了解本项目的使用与分享方式，不替代许可证。完整条款以本页收录的英文原文为准。</p><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer">${githubIcon}<span>查看项目源码</span>${icon('arrow')}</a></div>
         <div class="license-guide">${guide.map(([title, description, sections]) => `<section><div class="license-guide-title"><h2>${title}</h2><span>${sections}</span></div><p>${description}</p></section>`).join('')}</div>
-        <div class="license-sources"><p>完整中文译文可在 <a href="https://www.gnu.org/licenses/translations.html" target="_blank" rel="noopener noreferrer">GNU 翻译索引</a> 中查阅，或阅读其收录的 <a href="https://www.chinasona.org/gnu/agpl-3.0-cn.html" target="_blank" rel="noopener noreferrer">简体中文译文</a>。中文译文为非官方版本。</p></div>
+        <div class="license-sources"><p>中文译文可在 <a href="https://www.gnu.org/licenses/translations.html" target="_blank" rel="noopener noreferrer">GNU 翻译索引</a> 中查阅，或阅读其收录的 <a href="https://www.chinasona.org/gnu/agpl-3.0-cn.html" target="_blank" rel="noopener noreferrer">简体中文译文</a>。中文译文为非官方版本。</p></div>
         <details class="license-original"><summary><span>完整英文原文</span><span aria-hidden="true">＋</span></summary><pre lang="en" data-license-text></pre></details>
         <footer class="license-end"><a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU 官方原文 ${icon('arrow')}</a><a class="license-return" data-license-return>${icon('back')}<span>返回</span></a></footer>
       </article>

@@ -22,7 +22,6 @@ const scanMatch = location.pathname.match(/^\/(?:m\/)?scan\/([^/]+)\/?$/);
 let cabinetCode: string | null = null;
 try { if (scanMatch) cabinetCode = decodeURIComponent(scanMatch[1]); } catch { /* An invalid QR is not a cabinet. */ }
 let language: Language = 'zh';
-try { if (localStorage.getItem('tts-language') === 'en') language = 'en'; } catch { /* Storage is optional. */ }
 let view: View = 'loading', mode: 'borrow' | 'return' = 'borrow';
 let user: Identity | null = null, cabinet: Cabinet | null = null;
 let tools: Tool[] = [], loans: Loan[] = [];
@@ -286,7 +285,7 @@ app.addEventListener('click', event => {
   const action = button.dataset.action;
   if (action === 'language') {
     const username = document.querySelector<HTMLInputElement>('#username')?.value;
-    language = language === 'zh' ? 'en' : 'zh'; try { localStorage.setItem('tts-language',language); } catch { /* Optional. */ }
+    language = language === 'zh' ? 'en' : 'zh';
     render(); const input = document.querySelector<HTMLInputElement>('#username'); if (input && username) input.value = username;
     document.querySelector<HTMLButtonElement>('.language-button')?.focus();
   } else if (action === 'scan') {
@@ -306,7 +305,7 @@ async function initialize(): Promise<void> {
   const ticket = requestScope.begin();
   view = 'loading'; cabinetError = false; cabinet = null; render();
   try {
-    await Promise.allSettled([mascot,toolbox,screwdriver].map(src => { const image = new Image(); image.src = src; return image.decode(); }));
+    await Promise.allSettled([document.fonts.load('32px "Zhengya Display"'), ...[mascot,toolbox,screwdriver].map(src => { const image = new Image(); image.src = src; return image.decode(); })]);
     ticket.check();
     try {
       if (cabinetCode) { const result = await request<Cabinet>(endpoint()); ticket.check(); cabinet = result; }

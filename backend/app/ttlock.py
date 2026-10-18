@@ -66,6 +66,10 @@ class TTLockService:
                     id INTEGER PRIMARY KEY, batch_id TEXT NOT NULL, lock_id TEXT NOT NULL,
                     setting TEXT NOT NULL, requested TEXT NOT NULL, actor TEXT NOT NULL,
                     started_at TEXT NOT NULL, finished_at TEXT, outcome TEXT NOT NULL, error_code TEXT);
+                CREATE TABLE IF NOT EXISTS ttlock_gateway_changes (
+                    id INTEGER PRIMARY KEY, gateway_id TEXT NOT NULL, requested_name TEXT NOT NULL,
+                    actor TEXT NOT NULL, started_at TEXT NOT NULL, finished_at TEXT,
+                    outcome TEXT NOT NULL, error_code TEXT);
             ''')
 
     def _cipher(self, create=False):
@@ -642,6 +646,99 @@ class TTLockService:
                                     'acknowledged': acknowledged, 'current': refreshed})
             return {**refreshed, 'message': '锁设置已更新。'}
 
+    def _read_gateway_settings(self, provider_id):
+        detail = self._api('/v3/gateway/detail', {'gatewayId': provider_id})
+        if 'gatewayId' in detail and cloud_id(detail['gatewayId']) != provider_id:
+            fail(502, 'TTLOCK_INVALID_RESPONSE', '通通锁返回了不匹配的网关信息。')
+        connected = self._api('/v3/gateway/listLock', {'gatewayId': provider_id}).get('list')
+        if not isinstance(connected, list) or not all(isinstance(item, dict) for item in connected):
+            fail(502, 'TTLOCK_INVALID_RESPONSE', '通通锁未返回有效的关联网关设备列表。')
+        def text(item, key):
+            value = item.get(key)
+            return value[:250] if isinstance(value, str) else None
+        def integer(item, key, minimum, maximum):
+            value = item.get(key)
+            return value if type(value) is int and minimum <= value <= maximum else None
+        observed = now()
+        online = integer(detail, 'isOnline', 0, 1)
+        status = {0: 'offline', 1: 'online'}.get(online, 'unknown')
+        version = integer(detail, 'gatewayVersion', 1, 4)
+        cloud_name = text(detail, 'gatewayName')
+        safe_details = {key: detail[key] for key in ('gatewayName', 'gatewayMac', 'gatewayVersion', 'networkName', 'networkMac', 'lockNum', 'isOnline')
+                        if key in detail and type(detail[key]) in (str, int)}
+        locks = []
+        with self.database.transaction(write=True) as connection:
+            local = connection.execute('SELECT name FROM gateways WHERE provider_gateway_id=?', (provider_id,)).fetchone()
+            for item in connected:
+                lock_id = cloud_id(item.get('lockId'))
+                local_lock = connection.execute('SELECT name FROM locks WHERE provider_lock_id=?', (lock_id,)).fetchone()
+                timestamp = integer(item, 'updateDate', 0, 253402300799000)
+                updated_at = datetime.fromtimestamp(timestamp / 1000, timezone.utc).isoformat() if timestamp is not None else None
+                locks.append({'provider_lock_id': lock_id, 'name': local_lock['name'] if local_lock else None,
+                              'cloud_name': text(item, 'lockAlias') or text(item, 'lockName'), 'lock_mac': text(item, 'lockMac'),
+                              'rssi': integer(item, 'rssi', -200, 0), 'updated_at': updated_at})
+            # Refresh only cloud observations. Local aliases and cabinet assignments
+            # are separate; a cloud rename must not overwrite either of them.
+            connection.execute("UPDATE ttlock_devices SET details=?,status=?,observed_at=? WHERE kind='gateways' AND provider_id=?",
+                               (json.dumps(safe_details), status, observed, provider_id))
+            connection.execute('DELETE FROM ttlock_links WHERE gateway_id=?', (provider_id,))
+            for item in locks:
+                if connection.execute("SELECT 1 FROM ttlock_devices WHERE kind='locks' AND provider_id=? AND available=1", (item['provider_lock_id'],)).fetchone():
+                    connection.execute('INSERT OR IGNORE INTO ttlock_links(lock_id,gateway_id) VALUES(?,?)', (item['provider_lock_id'], provider_id))
+        return {'settings': {'cloud_name': cloud_name},
+                'capabilities': {'cloud_name': True, 'cloud_initialize': False, 'wifi_setup': False, 'time_sync': False, 'timezone': False},
+                'readonly': {'provider_gateway_id': provider_id, 'name': local['name'] if local else None,
+                             'gateway_mac': text(detail, 'gatewayMac'), 'version': version,
+                             'model': f'G{version}' if version else None, 'network_name': text(detail, 'networkName'),
+                             'network_mac': text(detail, 'networkMac'), 'lock_count': integer(detail, 'lockNum', 0, 100000),
+                             'status': status, 'locks': locks}, 'observed_at': observed}
+
+    def get_gateway_settings(self, record_id):
+        with self._lock:
+            return self._read_gateway_settings(self._device('gateways', record_id))
+
+    def update_gateway_settings(self, record_id, payload, actor):
+        if not isinstance(payload, dict) or set(payload) != {'cloud_name'}:
+            fail(422, 'TTLOCK_INVALID_SETTINGS', '网关仅支持修改平台名称。')
+        name = payload['cloud_name']
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 120 or any(ord(char) < 32 or ord(char) == 127 for char in name):
+            fail(422, 'TTLOCK_INVALID_SETTINGS', '网关名称需为 1–120 个字符，不能包含控制字符。')
+        name = name.strip()
+        with self._lock:
+            provider_id = self._device('gateways', record_id)
+            current = self._read_gateway_settings(provider_id)
+            if current['settings']['cloud_name'] == name:
+                return {**current, 'message': '设置未发生变化。'}
+            actor_name = str(actor.get('name') or actor.get('username') or actor.get('id') or 'admin') if isinstance(actor, dict) else str(actor or 'admin')
+            with self.database.transaction(write=True) as connection:
+                audit_id = connection.execute('''INSERT INTO ttlock_gateway_changes
+                    (gateway_id,requested_name,actor,started_at,outcome) VALUES(?,?,?,?,'pending')''',
+                    (provider_id, name, actor_name[:128], now())).lastrowid
+            failure = None
+            try:
+                self._api('/v3/gateway/rename', {'gatewayId': provider_id, 'gatewayName': name}, command=True)
+            except HTTPException as exc:
+                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                failure = (exc.status_code, detail.get('code', 'TTLOCK_ERROR'))
+            refreshed = None
+            try:
+                refreshed = self._read_gateway_settings(provider_id)
+            except HTTPException:
+                pass
+            confirmed = bool(refreshed and refreshed['settings']['cloud_name'] == name)
+            outcome = ('unknown' if failure[1] == 'COMMAND_RESULT_UNKNOWN' else 'failed') if failure else ('confirmed' if confirmed else 'unconfirmed')
+            with self.database.transaction(write=True) as connection:
+                connection.execute('UPDATE ttlock_gateway_changes SET outcome=?,finished_at=?,error_code=? WHERE id=?',
+                                   (outcome, now(), failure[1] if failure else None, audit_id))
+            if failure:
+                raise HTTPException(failure[0], detail={'code': 'TTLOCK_GATEWAY_UPDATE_FAILED',
+                    'message': '网关名称修改未能确认，系统未自动重发。请核对重新读取的名称。',
+                    'upstream_code': failure[1], 'current': refreshed})
+            if not confirmed:
+                raise HTTPException(502, detail={'code': 'TTLOCK_GATEWAY_UPDATE_UNCONFIRMED',
+                    'message': '网关改名指令已发送，但读回尚未确认，请重新读取网关信息。', 'current': refreshed})
+            return {**refreshed, 'message': '网关名称已更新。'}
+
     def gateway_status(self, record_id):
         with self._lock:
             provider_id = self._device('gateways', record_id)
@@ -687,6 +784,18 @@ def create_ttlock_router(require_admin, service: TTLockService):
         except ValueError:
             fail(422, 'TTLOCK_INVALID_SETTINGS', '锁设置格式无效。')
         return await run_in_threadpool(service.update_lock_settings, record_id, payload, actor)
+
+    @router.get('/gateways/{record_id}/settings')
+    def gateway_settings(record_id: int):
+        return service.get_gateway_settings(record_id)
+
+    @router.patch('/gateways/{record_id}/settings')
+    async def update_gateway_settings(record_id: int, request: Request, actor=Depends(require_admin)):
+        try:
+            payload = await request.json()
+        except ValueError:
+            fail(422, 'TTLOCK_INVALID_SETTINGS', '网关设置格式无效。')
+        return await run_in_threadpool(service.update_gateway_settings, record_id, payload, actor)
 
     @router.post('/sync')
     def sync():

@@ -57,7 +57,7 @@ def test_secrets_remain_encrypted_and_routes_require_admin(tmp_path):
     app = FastAPI()
     app.include_router(create_ttlock_router(denied, instance))
     client = TestClient(app)
-    for method, path in [('GET', 'settings'), ('PUT', 'settings'), ('POST', 'connect'), ('POST', 'sync'), ('GET', 'locks/1/settings'), ('PATCH', 'locks/1/settings')]:
+    for method, path in [('GET', 'settings'), ('PUT', 'settings'), ('POST', 'connect'), ('POST', 'sync'), ('GET', 'locks/1/settings'), ('PATCH', 'locks/1/settings'), ('GET', 'gateways/1/settings'), ('PATCH', 'gateways/1/settings')]:
         assert client.request(method, '/api/admin/ttlock/' + path, json={}).status_code == 401
     instance.save_settings({'client_id': 'another-application'})
     assert instance.public()['connected'] is False
@@ -239,3 +239,50 @@ def test_lock_setting_partial_timeout_stops_writes_and_returns_safe_readback(tmp
     with instance.database.transaction() as connection:
         rows = connection.execute('SELECT setting,outcome FROM ttlock_setting_changes ORDER BY id').fetchall()
     assert [tuple(row) for row in rows] == [('auto_lock_seconds', 'confirmed'), ('privacy_lock', 'unknown')]
+
+def test_gateway_cloud_rename_preserves_alias_and_refreshes_links_without_retry(tmp_path):
+    gateway = {'gatewayId': 21, 'gatewayName': '网关一', 'gatewayVersion': 2,
+               'gatewayMac': 'AA:BB:21', 'networkName': 'Campus', 'networkMac': 'CC:DD:01',
+               'isOnline': 1, 'lockNum': 1, 'private_key': 'NEVER_EXPOSE'}
+    renames = []
+    timeout = False
+    def handler(request):
+        if request.url.path == '/v3/gateway/detail':
+            return httpx.Response(200, json=gateway)
+        if request.url.path == '/v3/gateway/listLock':
+            return httpx.Response(200, json={'list': [{'lockId': 11, 'lockAlias': '平台锁名', 'rssi': -65, 'updateDate': 1792300000000, 'lockData': 'NEVER_EXPOSE'}]})
+        if request.url.path == '/v3/gateway/rename':
+            values = parse_qs(request.content.decode())
+            assert values['gatewayId'] == ['21']
+            gateway['gatewayName'] = values['gatewayName'][0]
+            renames.append(gateway['gatewayName'])
+            if timeout:
+                raise httpx.ReadTimeout('upstream secret', request=request)
+            return httpx.Response(200, json={'errcode': 0})
+        return cloud(request)
+    instance = service(tmp_path, handler)
+    instance.connect('fixture-account', 'fixture-password')
+    instance.sync()
+    with instance.database.transaction(write=True) as connection:
+        connection.execute("UPDATE gateways SET name='本地别名' WHERE provider_gateway_id='21'")
+    current = instance.get_gateway_settings(1)
+    assert current['settings']['cloud_name'] == '网关一'
+    assert current['readonly']['name'] == '本地别名'
+    assert current['readonly']['locks'][0]['rssi'] == -65
+    assert current['readonly']['locks'][0]['provider_lock_id'] == '11'
+    assert current['readonly']['locks'][0]['updated_at'] is not None
+    assert 'NEVER_EXPOSE' not in json.dumps(current)
+    assert current['capabilities']['cloud_initialize'] is False
+    updated = instance.update_gateway_settings(1, {'cloud_name': 'A区网关'}, 'Admin')
+    assert updated['settings']['cloud_name'] == 'A区网关'
+    assert updated['readonly']['name'] == '本地别名'
+    assert instance.device_snapshot('locks', 1)['cloud_gateways'][0]['cloud_name'] == 'A区网关'
+    timeout = True
+    with pytest.raises(HTTPException) as failure:
+        instance.update_gateway_settings(1, {'cloud_name': 'B区网关'}, 'Admin')
+    assert failure.value.status_code == 504
+    assert failure.value.detail['current']['settings']['cloud_name'] == 'B区网关'
+    assert renames == ['A区网关', 'B区网关']
+    with instance.database.transaction() as connection:
+        outcomes = [row[0] for row in connection.execute('SELECT outcome FROM ttlock_gateway_changes ORDER BY id')]
+    assert outcomes == ['confirmed', 'unknown']

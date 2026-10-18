@@ -122,7 +122,7 @@ def test_small_authenticated_request_replays_body_and_keeps_origin_check(tmp_pat
     client = TestClient(app, base_url="https://example.test")
     response = client.post("/api/auth/login", json={"username": "admin", "password": "fixture-admin-password"}, headers={"Origin": "https://example.test"})
     assert response.status_code == 200
-    payload = {"code": "A", "name": "一号柜"}
+    payload = {"code": "C", "name": "一号柜"}
     assert client.post("/api/admin/cabinets", json=payload).status_code == 403
     response = client.post("/api/admin/cabinets", content=json.dumps(payload).encode(), headers={"Content-Type": "application/json", "Origin": "https://example.test"})
     assert response.status_code == 201

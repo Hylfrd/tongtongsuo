@@ -9,10 +9,11 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth import AuthManager
 from app.admin import create_admin_router
+from app.cabinets import create_cabinet_router
 from app.request_limits import AdminBodyLimitMiddleware
 
 
-def create_app(frontend_dist: Path | None = None) -> FastAPI:
+def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -> FastAPI:
     application = FastAPI(
         title="Tongtongsuo",
         docs_url=None,
@@ -43,7 +44,8 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
     auth = AuthManager()
     application.add_middleware(AdminBodyLimitMiddleware)
     application.include_router(auth.router)
-    application.include_router(create_admin_router(auth.require_admin))
+    application.include_router(create_admin_router(auth.require_admin, db_path))
+    application.include_router(create_cabinet_router(auth.require_user, db_path))
 
     @application.middleware("http")
     async def private_api_responses(request: Request, call_next):
@@ -87,12 +89,14 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
         return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
     @application.get("/", include_in_schema=False)
+    @application.get("/m", include_in_schema=False)
     @application.get("/admin", include_in_schema=False)
     def frontend_root() -> FileResponse:
         return frontend_index()
 
-    @application.get("/scan/{lock_reference}", include_in_schema=False)
-    def frontend_scan(lock_reference: str) -> FileResponse:
+    @application.get("/scan/{cabinet_code}", include_in_schema=False)
+    @application.get("/m/scan/{cabinet_code}", include_in_schema=False)
+    def frontend_scan(cabinet_code: str) -> FileResponse:
         # A QR reference identifies an entry point; it never grants permission.
         return frontend_index()
 

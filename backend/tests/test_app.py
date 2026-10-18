@@ -58,9 +58,9 @@ def test_built_frontend_only_serves_known_entry_points(tmp_path: Path) -> None:
     assets = tmp_path / "assets"
     assets.mkdir()
     (assets / "app.js").write_text("export {};", encoding="utf-8")
-    client = TestClient(create_app(tmp_path))
+    client = TestClient(create_app(tmp_path, db_path=tmp_path / "inventory.sqlite3"))
 
-    for path in ("/", "/admin", "/scan/cabinet-1"):
+    for path in ("/", "/m", "/admin", "/scan/A", "/scan/B", "/scan/new-cabinet", "/m/scan/A", "/m/scan/new-cabinet"):
         response = client.get(path)
         assert response.status_code == 200
         assert response.text == page
@@ -76,6 +76,6 @@ def test_frontend_dist_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     (tmp_path / "index.html").write_text("Configured frontend", encoding="utf-8")
     monkeypatch.setenv("FRONTEND_DIST", str(tmp_path))
     monkeypatch.delenv("APP_VERSION", raising=False)
-    client = TestClient(create_app())
+    client = TestClient(create_app(db_path=tmp_path / "inventory.sqlite3"))
     assert client.get("/").text == "Configured frontend"
     assert client.get("/api/health").json()["version"] == "development"

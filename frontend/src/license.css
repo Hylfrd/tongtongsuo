@@ -1,0 +1,46 @@
+.license-app { min-height:100svh; background:linear-gradient(145deg,#deeff1 0 20%,#f7faf8 20% 78%,#e3ecf5 78%); padding:24px 28px 60px; }
+.license-page { max-width:980px; margin:0 auto; }
+.license-header { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:24px; }
+.license-brand { font-family:'Zhengya Display','PingFang SC',sans-serif; color:#007eab; font-size:24px; }
+.license-brand span { color:#274d5c; }
+.license-return { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 16px; border-radius:12px; text-decoration:none; color:#216073; background:#e0eef1; font-weight:650; transition:background 260ms,color 260ms; }
+.license-return:hover { background:#c8e3e8; color:#005269; }
+.license-paper { padding:clamp(24px,5vw,56px); border:1px solid #d9e6e8; border-radius:24px; background:#fffffff0; }
+.license-heading { padding-bottom:28px; border-bottom:1px solid #d6e4e7; }
+.license-eyebrow { color:#007c94; letter-spacing:.08em; font-size:13px; font-weight:700; margin-bottom:8px; }
+.license-heading h1 { font:400 clamp(30px,5vw,44px)/1.2 'Zhengya Display','PingFang SC',sans-serif; margin-bottom:12px; }
+.license-heading > p:last-child { color:#58717a; font-size:15px; }
+.license-intro { padding-top:28px; line-height:1.9; }
+.license-intro > a { display:inline-flex; align-items:center; gap:9px; margin-top:18px; color:#00788e; font-weight:650; text-decoration:none; }
+.license-intro > a svg { width:20px; height:20px; }
+.license-guide { margin-top:24px; }
+.license-guide section { padding:22px 0; border-top:1px solid #e1e9eb; }
+.license-guide-title { display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:10px; }
+.license-guide h2 { font-size:19px; color:#205264; }
+.license-guide-title > span { color:#6b8188; font-size:12px; white-space:nowrap; }
+.license-guide p,.license-sources p { font-size:15px; line-height:1.9; overflow-wrap:anywhere; }
+.license-sources { padding:18px 22px; background:#eff6f7; border-radius:12px; margin-top:4px; }
+.license-sources a,.license-end > a:first-child { color:#00778e; }
+.license-original { margin-top:28px; border-top:1px solid #d6e4e7; border-bottom:1px solid #d6e4e7; }
+.license-original summary { display:flex; justify-content:space-between; gap:20px; align-items:center; padding:20px 0; cursor:pointer; font-size:17px; font-weight:650; list-style:none; }
+.license-original summary::-webkit-details-marker { display:none; }
+.license-original summary > span:last-child { transition:transform 300ms; }
+.license-original[open] summary > span:last-child { transform:rotate(45deg); }
+.license-original pre { margin:0 0 24px; padding:20px; background:#f5f8f8; border-radius:10px; white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.8 ui-monospace,Consolas,monospace; color:#3f5661; }
+.license-end { display:flex; justify-content:space-between; align-items:center; gap:16px; padding-top:24px; }
+.license-end > a:first-child { display:inline-flex; align-items:center; gap:8px; font-size:14px; }
+.license-app .icon { width:20px; height:20px; }
+@media (max-width:600px) {
+  .license-app { padding:18px 14px 32px; }
+  .license-header { gap:12px; margin-bottom:18px; }
+  .license-brand { font-size:20px; line-height:1.4; }
+  .license-brand span { display:block; font-size:17px; }
+  .license-paper { padding:24px 20px; border-radius:18px; }
+  .license-return { flex-shrink:0; padding:10px 12px; }
+  .license-heading { padding-bottom:22px; }
+  .license-intro { padding-top:22px; }
+  .license-guide section { padding:18px 0; }
+  .license-sources { padding:16px; }
+  .license-original pre { padding:14px; font-size:12px; }
+}
+@media (prefers-reduced-motion:reduce) { .license-return,.license-original summary > span:last-child { transition:none; } }

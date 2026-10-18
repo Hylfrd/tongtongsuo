@@ -286,3 +286,9 @@
   .adm-form-actions { background:#fff; }
 }
 @media (prefers-reduced-motion:reduce) { .admin-shell *, .admin-shell *::after, .adm-dialog { animation:none!important; transition:none!important; } }
+
+/* Cabinet entry points remain available for every current and future cabinet. */
+.adm-scan-links { display:flex; flex-wrap:wrap; align-items:center; gap:4px 18px; border-top:1px solid var(--adm-line); margin-top:16px; padding-top:8px; }
+.adm-scan-links a { display:inline-flex; align-items:center; gap:6px; min-height:44px; color:#006f88; font-size:13px; text-underline-offset:5px; }
+.adm-scan-links svg { width:16px; height:16px; }
+.adm-welcome h2 { font-family:inherit; }

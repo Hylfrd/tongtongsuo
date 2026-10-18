@@ -1,0 +1,25 @@
+.adm-onboarding-dialog { width:min(540px,calc(100% - 40px)); padding:26px; border-radius:12px; }
+.adm-onboarding-dialog .adm-dialog-head { margin-bottom:14px; }
+.adm-onboarding-dialog .adm-dialog-head h2 { font-size:21px; }
+.adm-onboarding-intro { margin:0!important; color:var(--adm-ink); font-size:14px; line-height:1.75; }
+.adm-onboarding-steps { display:grid; gap:12px; margin:22px 0; padding-left:21px; color:var(--adm-muted); font-size:13px; line-height:1.8; }
+.adm-onboarding-steps li { padding-left:4px; }
+.adm-onboarding-steps li::marker { color:#397084; font-weight:650; }
+.adm-onboarding-bluetooth { display:flex; align-items:center; gap:16px; padding:18px 0; border-top:1px solid var(--adm-line); border-bottom:1px solid var(--adm-line); }
+.adm-onboarding-bluetooth button { flex-shrink:0; }
+.adm-onboarding-bluetooth p { margin:0!important; color:var(--adm-muted); font-size:12px; line-height:1.7; }
+.adm-onboarding-actions { display:flex; align-items:center; justify-content:flex-end; gap:20px; margin-top:24px; }
+.adm-onboarding-actions [data-settings] { margin-right:auto; }
+.adm-onboarding-actions .icon { width:17px; height:17px; }
+.adm-onboarding-actions .is-loading .icon { animation:adm-onboarding-spin 1500ms linear infinite; }
+.adm-onboarding-dialog[open] { animation:adm-onboarding-enter var(--adm-motion-panel,650ms) var(--adm-motion-ease,cubic-bezier(.2,.8,.2,1)); }
+.adm-onboarding-dialog[open]::backdrop { animation:adm-onboarding-backdrop-enter var(--adm-motion-panel,650ms) var(--adm-motion-ease,cubic-bezier(.2,.8,.2,1)); }
+.adm-onboarding-dialog[open].is-closing { pointer-events:none; animation:adm-onboarding-exit var(--adm-motion-panel,650ms) var(--adm-motion-ease,cubic-bezier(.2,.8,.2,1)) forwards; }
+.adm-onboarding-dialog[open].is-closing::backdrop { animation:adm-onboarding-backdrop-exit var(--adm-motion-panel,650ms) var(--adm-motion-ease,cubic-bezier(.2,.8,.2,1)) forwards; }
+@keyframes adm-onboarding-enter { from { opacity:.35; transform:translateY(10px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes adm-onboarding-exit { from { opacity:1; transform:translateY(0) scale(1); } to { opacity:0; transform:translateY(6px) scale(.985); } }
+@keyframes adm-onboarding-backdrop-enter { from { background:#1e354500; } to { background:#1e354551; } }
+@keyframes adm-onboarding-backdrop-exit { from { background:#1e354551; } to { background:#1e354500; } }
+@keyframes adm-onboarding-spin { to { transform:rotate(360deg); } }
+@media(max-width:550px) { .adm-onboarding-actions { flex-wrap:wrap; gap:14px; } .adm-onboarding-bluetooth { align-items:flex-start; } }
+@media(prefers-reduced-motion:reduce) { .adm-onboarding-dialog[open],.adm-onboarding-dialog[open]::backdrop,.adm-onboarding-dialog[open].is-closing,.adm-onboarding-dialog[open].is-closing::backdrop,.adm-onboarding-dialog .icon { animation:none!important; transition:none!important; } }

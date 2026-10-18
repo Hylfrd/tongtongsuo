@@ -1,0 +1,16 @@
+.adm-confirm-dialog { width:min(420px,calc(100% - 40px)); padding:26px; border-radius:12px; }
+.adm-confirm-dialog h2 { margin:0; color:var(--adm-ink,#203e4c); font-size:20px; font-weight:650; line-height:1.45; }
+.adm-confirm-dialog > p { margin:14px 0 0!important; color:var(--adm-muted,#526b78); font-size:14px; line-height:1.8; white-space:pre-line; overflow-wrap:anywhere; }
+.adm-confirm-actions { display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:26px; }
+.adm-confirm-actions button { min-width:80px; }
+.adm-confirm-dialog .adm-confirm-danger { background:#a63e38; color:#fff; }
+.adm-confirm-dialog .adm-confirm-danger:hover { background:#8e302c; }
+.adm-confirm-dialog[open] { animation:adm-confirm-enter var(--adm-motion-panel,650ms) var(--adm-motion-ease,cubic-bezier(.2,.8,.2,1)); }
+.adm-confirm-dialog[open]::backdrop { background:#1e354551; animation:adm-confirm-backdrop-enter var(--adm-motion-panel,650ms) var(--adm-motion-ease,cubic-bezier(.2,.8,.2,1)); }
+.adm-confirm-dialog[open].is-closing { pointer-events:none; animation:adm-confirm-exit var(--adm-motion-panel,650ms) var(--adm-motion-ease,cubic-bezier(.2,.8,.2,1)) forwards; }
+.adm-confirm-dialog[open].is-closing::backdrop { animation:adm-confirm-backdrop-exit var(--adm-motion-panel,650ms) var(--adm-motion-ease,cubic-bezier(.2,.8,.2,1)) forwards; }
+@keyframes adm-confirm-enter { from { opacity:.35; transform:translateY(10px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes adm-confirm-exit { from { opacity:1; transform:translateY(0) scale(1); } to { opacity:0; transform:translateY(6px) scale(.985); } }
+@keyframes adm-confirm-backdrop-enter { from { background:#1e354500; } to { background:#1e354551; } }
+@keyframes adm-confirm-backdrop-exit { from { background:#1e354551; } to { background:#1e354500; } }
+@media(prefers-reduced-motion:reduce) { .adm-confirm-dialog[open],.adm-confirm-dialog[open]::backdrop,.adm-confirm-dialog[open].is-closing,.adm-confirm-dialog[open].is-closing::backdrop { animation:none!important; transition:none!important; } }

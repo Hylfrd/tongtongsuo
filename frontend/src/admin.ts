@@ -6,12 +6,16 @@ import { validateForm, clearFieldError, markFieldError } from './validation';
 import { createAISettings, attachIconGenerator } from './ai-settings';
 import { createMembersPanel } from './member-settings';
 import { createTTLockSettings } from './ttlock-settings';
+import { createLockEditor } from './lock-editor';
+import { confirmDialog } from './confirm-dialog';
+import { createGatewayEditor } from './gateway-editor';
+import { openDeviceOnboarding } from './device-onboarding';
 import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
 import { icon, githubIcon, type IconName } from './icons';
 
 type Cabinet = { id: number; code: string; name: string; group_name: string; location: string; notes: string; lock_count: number; tool_count: number };
-type DeviceState = { status: string; observed_at?: string | null; cloud_available?: boolean; electric_quantity?: number | null; cloud_gateways?: {provider_gateway_id: string; name: string}[] };
+type DeviceState = { status: string; observed_at?: string | null; cloud_available?: boolean; electric_quantity?: number | null; cloud_gateways?: {provider_gateway_id: string; name: string; cloud_name?: string}[] };
 type Gateway = DeviceState & { id: number; code: string; name: string; provider_gateway_id: string | null; notes: string };
 type Lock = DeviceState & { id: number; code: string; name: string; provider_lock_id: string | null; cabinet_id: number | null; gateway_id: number | null; notes: string };
 type Tool = { id: number; cabinet_id: number; name: string; name_en: string; description: string; description_en: string; unit: string; unit_en: string; notes: string; quantity: number; icon: string; icon_data: string | null; available_quantity: number; borrowed_quantity: number; borrowers: {name: string; school_code: string | null; quantity: number; borrowed_at: string}[] };
@@ -37,6 +41,16 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   let loaded = false, forbidden = false, loanRequest = 0;
   let passwordChangePending = false;
   let deviceBusy = false;
+  let openedLockId: number | null = null;
+  let editorClosing = false;
+  let lockEditor: ReturnType<typeof createLockEditor> | undefined;
+  let openedGatewayId: number | null = null;
+  let gatewayEditor: ReturnType<typeof createGatewayEditor> | undefined;
+  let pollingTimer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false, pollRunning = false;
+  let lastDeviceSync = 0, lastStatusQuery = 0, lastParameterQuery = 0, lastGatewayQuery = 0;
+  const editorBusy = () => !!lockEditor?.isBusy() || !!gatewayEditor?.isBusy();
+  const autoIntervals = {sync:30*60000,status:5*60000,parameters:3*60000};
   const initialFilters = new URLSearchParams(location.search);
   let filters = {
     q:view === 'loans' ? (initialFilters.get('q') ?? '').slice(0,120) : '',
@@ -50,15 +64,26 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   const aiSettings = createAISettings(request);
   const memberPanel = createMembersPanel(request);
   const ttlockSettings = createTTLockSettings(request);
-  window.addEventListener('pagehide',()=>{aiSettings.dispose();memberPanel.dispose();ttlockSettings.dispose();},{once:true});
+  const lifecycle = new AbortController();
+  function dispose(): void {
+    disposed=true;lifecycle.abort();if(pollingTimer)clearTimeout(pollingTimer);
+    aiSettings.dispose();memberPanel.dispose();ttlockSettings.dispose();lockEditor?.dispose();gatewayEditor?.dispose();disposeBackground?.();
+  }
+  window.addEventListener('pagehide',dispose,{once:true});
+  document.addEventListener('visibilitychange',()=>{
+    if(pollingTimer)clearTimeout(pollingTimer);
+    if(!document.hidden)schedulePolling();
+  },{signal:lifecycle.signal});
 
   async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await fetch(url, {signal:AbortSignal.timeout(15000), ...init, credentials:'same-origin', cache:'no-store', headers:{...(init?.body ? {'Content-Type':'application/json'} : {}), ...init?.headers}});
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) { forbidden = true; aiSettings.dispose(); memberPanel.dispose(); ttlockSettings.dispose(); }
       let message = response.status === 401 ? '登录已过期，请重新登录。' : response.status === 403 ? '当前账号没有管理权限。' : `请求未完成（${response.status}），请稍后重试。`;
-      try { const body = await response.json(); if (typeof body.detail === 'string') message = body.detail; else if (body.detail && typeof body.detail.message === 'string') message = body.detail.message; else if (Array.isArray(body.detail)) message = '填写内容不符合要求，请检查字段长度、格式和数量。'; } catch { /* Keep a useful message for proxy errors. */ }
-      throw new Error(message);
+      let code='';
+      try { const body = await response.json(); code=body.detail?.code??''; if (typeof body.detail === 'string') message = body.detail; else if (body.detail && typeof body.detail.message === 'string') message = body.detail.message; else if (Array.isArray(body.detail)) message = '填写内容不符合要求，请检查字段长度、格式和数量。'; } catch { /* Keep a useful message for proxy errors. */ }
+      const error=new Error(message);
+      if (response.status === 401 || response.status === 403 && code==='ADMIN_REQUIRED') { forbidden = true; dispose(); fail(error); }
+      throw error;
     }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
@@ -78,7 +103,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   function compactCabinetCode(code: string, name: string): boolean { return name === code || name === `${code}区`; }
   function itemName(item: {name:string;code?:string}): string { return item.code && !compactCabinetCode(item.code,item.name) ? `${item.code} · ${item.name}` : item.name; }
   function cabinetName(id: number | null): string { const cabinet = cabinets.find(item=>item.id===id); return cabinet ? itemName(cabinet) : '尚未分配柜子'; }
-  function cloudGateways(item: Lock): string { return item.cloud_gateways?.length ? item.cloud_gateways.map(gateway=>gateway.name || `网关 ${gateway.provider_gateway_id}`).join('、') : '尚未发现关联网关'; }
+  function cloudGateways(item: Lock): string { return item.cloud_gateways?.length ? item.cloud_gateways.map(gateway=>gateway.cloud_name || gateway.name || `网关 ${gateway.provider_gateway_id}`).join('、') : '尚未发现关联网关'; }
   function options(items: {id:number;name:string;code?:string}[], selected: unknown, blank: string): string { return `<option value="">${blank}</option>` + items.map(item=>`<option value="${item.id}" ${String(selected)===String(item.id)?'selected':''}>${escape(itemName(item))}</option>`).join(''); }
   function empty(title: string, copy: string, action?: string): string { return `<div class="adm-empty">${icon('toolbox')}<h3>${title}</h3>${copy ? `<p>${copy}</p>` : ''}${action ?? ''}</div>`; }
   function controls(kind: Resource, id: number): string { return `<div class="adm-row-actions"><button class="adm-text" data-edit="${kind}" data-id="${id}">编辑</button><button class="adm-text adm-danger" data-delete="${kind}" data-id="${id}">删除</button></div>`; }
@@ -99,6 +124,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     target?.focus({preventScroll:true});
   }
   function navigate(next: View): void {
+    if(disposed || forbidden)return;
     if (view === next) return;
     if (view === 'members') memberPanel.leave();
     view = next;
@@ -106,10 +132,12 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     url.search = view === 'loans' ? `section=loans&${loanQuery()}` : `section=${view}`;
     history.replaceState(null,'',url);
     shell('#admin-page-title', true);
+    schedulePolling();
     window.scrollTo({top:0,behavior:'instant'});
     if (view === 'loans') void loadLoans();
   }
   function shell(focusSelector?: string, animate = false): void {
+    if(disposed || forbidden)return;
     const currentContent = root.querySelector<HTMLElement>('#admin-content');
     if (currentContent) {
       root.querySelector('#admin-page-title')!.textContent = titles[view];
@@ -125,7 +153,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       currentContent.getAnimations().forEach(animation=>animation.cancel());
       if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
         const motion = getComputedStyle(currentContent);
-        currentContent.animate([{opacity:.85,transform:'translateY(3px)'},{opacity:1,transform:'translateY(0)'}],{duration:parseFloat(motion.getPropertyValue('--adm-motion-panel')) || 400,easing:motion.getPropertyValue('--adm-motion-ease').trim() || 'cubic-bezier(.2,.8,.2,1)'});
+        currentContent.animate([{transform:'translateY(12px)'},{transform:'translateY(0)'}],{duration:parseFloat(motion.getPropertyValue('--adm-motion-panel')) || 650,easing:motion.getPropertyValue('--adm-motion-ease').trim() || 'cubic-bezier(.2,.8,.2,1)'});
       }
       return;
     }
@@ -137,7 +165,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       event.preventDefault();
       navigate(link.dataset.view as View);
     }));
-    root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().then(()=>aiSettings.dispose()).catch(fail));
+    root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().then(dispose).catch(fail));
     root.querySelector('#admin-refresh')?.addEventListener('click',()=>void refresh());
     bindContent();
     restoreFocus(focusSelector);
@@ -152,7 +180,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       const borrowPercent = (Math.min(1,value(stats.average_borrow_ratio)) * 100).toLocaleString('zh-CN',{maximumFractionDigits:1});
       return `<section class="adm-stats" aria-label="当前管理概况"><div><strong>${stats.cabinet_count}</strong><span>共享柜子</span></div><div><strong>${stats.tool_count}</strong><span>工具种类</span></div><div><strong>${stats.active_loan_count}</strong><span>未归还记录</span></div><div><strong>${stats.lock_count}<small> / ${stats.gateway_count}</small></strong><span>锁 / 网关</span></div></section><section class="adm-stats adm-stats-usage" aria-label="使用情况"><div title="按实际借用记录中的学号去重，不含仅登录用户"><strong>${count(stats.user_count)}<small> 人</small></strong><span>累计用户</span></div><div title="各有库存柜子的当前借出件数占库存件数比例的算术平均"><strong>${borrowPercent}<small>%</small></strong><span>平均外借比例</span></div><div title="同一学号、柜子和借用时间计一次；日均从首笔借用到北京时间今天，含首尾日期"><strong>${count(stats.borrow_visit_count)}<small> 人次 / ${count(stats.borrow_visits_per_day,1)} 人次/天</small></strong><span>累计借用 / 每日频率</span></div><div title="按北京时间当日统计；同一学号、柜子和操作时间计一次"><strong>${count(stats.today_borrow_count)}<small> / ${count(stats.today_return_count)}</small></strong><span>今日借用 / 今日归还</span></div></section><div class="adm-section-heading"><h2>柜子一览</h2><button class="adm-text" data-add="cabinets">添加柜子 ${icon('arrow')}</button></div>${cabinetCards()}`;
     }
-    if(view==='devices') return `<div class="adm-tabs" aria-label="设备类别">${([['cabinets','柜子'],['locks','锁'],['gateways','网关']] as [Resource,string][]).map(([key,label])=>`<button data-device-tab="${key}" aria-pressed="${deviceTab===key}">${label}<span>${key==='cabinets'?cabinets.length:key==='locks'?locks.length:gateways.length}</span></button>`).join('')}</div><div class="adm-section-heading"><h2>${deviceTab==='cabinets'?'柜子与分组':deviceTab==='locks'?'锁设备':'网关设备'}</h2><div class="adm-device-actions"><button class="adm-outline" id="admin-sync-devices" ${deviceBusy?'disabled':''}>${icon('refresh')}同步通通锁</button><button class="adm-button" data-add="${deviceTab}">添加${deviceTab==='cabinets'?'柜子':deviceTab==='locks'?'锁':'网关'}</button></div></div>${deviceTab==='cabinets'?cabinetCards():deviceTable(deviceTab)}`;
+    if(view==='devices') return `<div class="adm-tabs" aria-label="设备类别">${([['cabinets','柜子'],['locks','锁'],['gateways','网关']] as [Resource,string][]).map(([key,label])=>`<button data-device-tab="${key}" aria-pressed="${deviceTab===key}">${label}<span>${key==='cabinets'?cabinets.length:key==='locks'?locks.length:gateways.length}</span></button>`).join('')}</div><div class="adm-section-heading"><h2>${deviceTab==='cabinets'?'柜子与分组':deviceTab==='locks'?'锁设备':'网关设备'}</h2><div class="adm-device-toolbar">${deviceTab!=='cabinets'?`<button class="adm-outline" id="admin-request-lock-status" title="管理页显示期间，每 5 分钟自动查询" ${deviceBusy?'disabled':''}>${icon('refresh')}请求状态</button>`:''}<button class="adm-outline" id="admin-sync-devices" title="管理页显示期间，每 30 分钟自动同步" ${deviceBusy?'disabled':''}>${icon('refresh')}同步通通锁</button><button class="adm-button" data-add="${deviceTab}">添加${deviceTab==='cabinets'?'柜子':deviceTab==='locks'?'锁':'网关'}</button></div></div>${deviceTab==='cabinets'?cabinetCards():`<section class="adm-device-surface"><div id="admin-device-list">${deviceTable(deviceTab)}</div>${deviceTab==='locks'?'<div id="admin-lock-editor"></div>':'<div id="admin-gateway-editor"></div>'}</section>`}`;
     if(view==='tools') {
       const search = toolSearch.toLocaleLowerCase();
       const visible = tools.filter(tool=>(!toolCabinet || String(tool.cabinet_id)===toolCabinet) && (!search || [tool.name,tool.name_en,tool.description,tool.description_en,tool.notes].some(value=>value?.toLocaleLowerCase().includes(search))))
@@ -175,7 +203,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   function deviceTable(kind: 'locks'|'gateways'): string {
     const items = kind==='locks'?locks:gateways;
     if(!items.length) return empty(kind==='locks'?'暂无锁':'暂无网关','');
-    return `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="${kind==='locks'?'锁':'网关'}设备列表"><table class="adm-table"><thead><tr><th>设备 / 编号</th><th>${kind==='locks'?'柜子 / 网关':'云端设备编号'}</th><th>状态</th><th>设备操作</th><th>管理</th></tr></thead><tbody>${items.map(item=>`<tr><td><strong>${escape(item.name)}</strong><small>${escape(item.code)}</small></td><td>${kind==='locks'?`${escape(cabinetName((item as Lock).cabinet_id))}<small>${escape(cloudGateways(item as Lock))}</small>`:escape((item as Gateway).provider_gateway_id || '未配置')}</td><td>${deviceStatus(item)}</td><td><div class="adm-device-actions">${kind==='locks'?`<button class="adm-outline" data-admin-action="unlock" data-id="${item.id}" ${deviceBusy?'disabled':''}>${icon('open')}开锁</button><button class="adm-outline" data-admin-action="lock" data-id="${item.id}" ${deviceBusy?'disabled':''}>${icon('lock')}关锁</button>`:''}<button class="adm-text" data-admin-action="status" data-kind="${kind}" data-id="${item.id}" ${deviceBusy?'disabled':''}>请求状态</button></div></td><td>${controls(kind,item.id)}</td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="${kind==='locks'?'锁':'网关'}设备列表"><table class="adm-table"><thead><tr><th>设备 / 编号</th><th>${kind==='locks'?'柜子 / 网关':'云端设备编号'}</th><th>状态</th><th>设备操作</th><th>管理</th></tr></thead><tbody>${items.map(item=>`<tr><td><strong>${escape(item.name)}</strong><small>${escape(item.code)}</small></td><td>${kind==='locks'?`${escape(cabinetName((item as Lock).cabinet_id))}<small>${escape(cloudGateways(item as Lock))}</small>`:escape((item as Gateway).provider_gateway_id || '未配置')}</td><td>${deviceStatus(item)}</td><td><div class="adm-device-actions">${kind==='locks'?`<button class="adm-outline" data-admin-action="unlock" data-id="${item.id}" ${deviceBusy?'disabled':''}>${icon('open')}开锁</button><button class="adm-outline" data-admin-action="lock" data-id="${item.id}" ${deviceBusy?'disabled':''}>${icon('lock')}关锁</button>`:''}${kind==='gateways'?`<button class="adm-text" data-admin-action="status" data-kind="${kind}" data-id="${item.id}" ${deviceBusy?'disabled':''}>请求状态</button>`:''}</div></td><td>${controls(kind,item.id)}</td></tr>`).join('')}</tbody></table></div>`;
   }
   function loanTable(): string { return loans.length ? `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="借还记录"><table class="adm-table adm-loan-table"><thead><tr><th>使用人 / 编号</th><th>柜子</th><th>工具 / 数量</th><th>借用时间</th><th>归还时间</th><th>借用天数</th><th>状态</th></tr></thead><tbody>${loans.map(loan=>`<tr><td><strong>${escape(loan.user_name)}</strong><small>${escape(loan.school_code || '无人员编号')}</small></td><td>${escape(loan.cabinet_name)}${!compactCabinetCode(loan.cabinet_code,loan.cabinet_name) ? `<small>${escape(loan.cabinet_code)}</small>` : ''}</td><td>${escape(loan.tool_name)}<small>${loan.quantity} ${escape(tools.find(tool=>tool.id===loan.tool_id)?.unit || '件')}</small></td><td>${escape(formatDate(loan.borrowed_at))}</td><td>${escape(formatDate(loan.returned_at))}</td><td>${loan.days} 天</td><td><span class="adm-badge ${loan.returned_at?'is-returned':'is-active'}">${loan.returned_at?'已归还':'借用中'}</span></td></tr>`).join('')}</tbody></table></div>` : empty('暂无借还记录',''); }
   function loanQuery(): string { return new URLSearchParams(Object.entries(filters).filter(([,value])=>!!value)).toString(); }
@@ -198,6 +226,19 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     form.addEventListener('input',clear);
     form.addEventListener('change',clear);
   }
+  async function closeDialog(dialog: HTMLDialogElement): Promise<void> {
+    if(!dialog.open || dialog.dataset.closing)return;
+    dialog.dataset.closing='true';
+    if(!matchMedia('(prefers-reduced-motion:reduce)').matches){
+      dialog.getAnimations().forEach(animation=>animation.cancel());
+      const motion=getComputedStyle(dialog);
+      await dialog.animate([{opacity:1,transform:'translateY(0)'},{opacity:0,transform:'translateY(10px)'}],{duration:parseFloat(motion.getPropertyValue('--adm-motion-panel'))||650,easing:motion.getPropertyValue('--adm-motion-ease').trim()||'ease-in-out',fill:'forwards'}).finished.catch(()=>{});
+    }
+    dialog.close();
+  }
+  function animateDialogCancel(dialog: HTMLDialogElement): void {
+    dialog.addEventListener('cancel',event=>{event.preventDefault();void closeDialog(dialog);});
+  }
   function bindContent(): void {
     const ttlockTarget = root.querySelector('#admin-ttlock-settings');
     if(ttlockTarget)ttlockSettings.mount(ttlockTarget);
@@ -207,13 +248,13 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     if(aiTarget)aiSettings.mount(aiTarget);
     root.querySelector('#admin-password')?.addEventListener('click',changePassword);
     root.querySelector<HTMLButtonElement>('#admin-sync-devices')?.addEventListener('click',event=>void syncDevices(event.currentTarget as HTMLButtonElement));
+    root.querySelector('#admin-request-lock-status')?.addEventListener('click',()=>void requestDeviceStatuses());
     root.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.go as View)));
     root.querySelectorAll<HTMLButtonElement>('[data-device-tab]').forEach(button=>button.addEventListener('click',()=>{deviceTab=button.dataset.deviceTab as 'cabinets'|'locks'|'gateways';shell(`[data-device-tab="${deviceTab}"]`, true);}));
     root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach(button=>button.addEventListener('click',()=>edit(button.dataset.add as Resource)));
-    root.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach(button=>button.addEventListener('click',()=>edit(button.dataset.edit as Resource,Number(button.dataset.id))));
-    root.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach(button=>button.addEventListener('click',()=>void remove(button.dataset.delete as Resource,Number(button.dataset.id),button)));
+    bindRecordActions(root);
     root.querySelectorAll<HTMLButtonElement>('[data-copy-scan]').forEach(button=>button.addEventListener('click',()=>{const url = new URL(`/scan/${encodeURIComponent(button.dataset.copyScan!)}`,location.origin).href; void navigator.clipboard.writeText(url).then(()=>notice('柜子链接已复制。')).catch(()=>showToast('复制失败，请检查浏览器剪贴板权限。','error'));}));
-    root.querySelectorAll<HTMLButtonElement>('[data-admin-action]').forEach(button=>button.addEventListener('click',()=>void deviceAction(button)));
+    mountLockEditor();
     const toolForm = root.querySelector<HTMLFormElement>('#admin-tool-filters');
     toolForm?.addEventListener('submit',event=>{
       event.preventDefault();
@@ -238,29 +279,119 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     loanForm?.addEventListener('submit',event=>{event.preventDefault();if (!validateForm(event.currentTarget as HTMLFormElement)) return;const form=new FormData(event.currentTarget as HTMLFormElement);filters={q:String(form.get('q')??'').trim(),cabinet_id:String(form.get('cabinet_id')??''),status:String(form.get('status')),sort:String(form.get('sort')),direction:String(form.get('direction')),school_code:memberQueryEdited ? '' : filters.school_code};memberQueryEdited=false;void loadLoans();});
     root.querySelector<HTMLButtonElement>('#admin-export')?.addEventListener('click',event=>void exportLoans(event.currentTarget as HTMLButtonElement));
   }
+  function bindRecordActions(scope: ParentNode): void {
+    scope.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach(button=>button.addEventListener('click',()=>edit(button.dataset.edit as Resource,Number(button.dataset.id))));
+    scope.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach(button=>button.addEventListener('click',()=>void remove(button.dataset.delete as Resource,Number(button.dataset.id),button)));
+    scope.querySelectorAll<HTMLButtonElement>('[data-admin-action]').forEach(button=>button.addEventListener('click',()=>void deviceAction(button)));
+  }
+  function mountLockEditor(): void {
+    const target=root.querySelector('#admin-lock-editor'),record=locks.find(item=>item.id===openedLockId);
+    if(target && record && lockEditor)lockEditor.mount(target,record,cabinets);
+    const gatewayTarget=root.querySelector('#admin-gateway-editor'),gateway=gateways.find(item=>item.id===openedGatewayId);
+    if(gatewayTarget && gateway && gatewayEditor)gatewayEditor.mount(gatewayTarget,gateway);
+  }
+  function renderDeviceRows(): void {
+    if(view!=='devices' || deviceTab==='cabinets')return;
+    const list=root.querySelector('#admin-device-list');
+    if(list){list.innerHTML=deviceTable(deviceTab);bindRecordActions(list);}
+    root.querySelectorAll<HTMLElement>('[data-device-tab] span').forEach(span=>{
+      const kind=span.parentElement?.dataset.deviceTab;
+      span.textContent=String(kind==='cabinets'?cabinets.length:kind==='locks'?locks.length:gateways.length);
+    });
+    if(openedLockId && !locks.some(item=>item.id===openedLockId)){
+      lockEditor?.dispose();lockEditor=undefined;openedLockId=null;
+    }
+    if(openedGatewayId && !gateways.some(item=>item.id===openedGatewayId)){
+      gatewayEditor?.dispose();gatewayEditor=undefined;openedGatewayId=null;
+    }
+  }
+  async function openLockEditor(id: number): Promise<void> {
+    if(editorClosing || editorBusy() || deviceBusy){showToast('正在处理设备请求，请稍候。','info');return;}
+    if(openedLockId!==id && lockEditor?.isDirty() && !await confirmDialog({title:'切换锁',message:'当前锁有未保存的修改，切换后将丢弃这些修改。',confirmLabel:'放弃修改并切换'}))return;
+    if(disposed || editorClosing || deviceBusy || editorBusy())return;
+    if(openedLockId!==id || !lockEditor){
+      lockEditor?.dispose();
+      lockEditor=createLockEditor(request,{
+        onSaved:record=>{const current=locks.find(item=>item.id===record.id);if(current)Object.assign(current,record);renderDeviceRows();},
+        onClose:()=>void closeDeviceEditor('locks'),
+      });
+    }
+    const expanding=openedLockId!==id;
+    openedLockId=id;lastParameterQuery=Date.now();
+    mountLockEditor();
+    const target=root.querySelector<HTMLElement>('#admin-lock-editor');
+    if(expanding && target && !matchMedia('(prefers-reduced-motion:reduce)').matches){
+      const height=target.getBoundingClientRect().height;
+      target.style.overflow='clip';
+      void target.animate([{maxHeight:'0px'},{maxHeight:`${height}px`}],{duration:650,easing:'cubic-bezier(.2,.8,.2,1)'}).finished.finally(()=>{target.style.overflow='';}).catch(()=>{});
+    }
+    root.querySelector('#admin-lock-editor')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth',block:'nearest'});
+  }
+  async function openGatewayEditor(id:number): Promise<void> {
+    if(editorClosing || editorBusy() || deviceBusy){showToast('正在处理设备请求，请稍候。','info');return;}
+    if(openedGatewayId!==id && gatewayEditor?.isDirty() && !await confirmDialog({title:'切换网关',message:'当前网关有未保存的修改，切换后将丢弃这些修改。',confirmLabel:'放弃修改并切换'}))return;
+    if(disposed || editorClosing || deviceBusy || editorBusy())return;
+    if(openedGatewayId!==id || !gatewayEditor){
+      gatewayEditor?.dispose();
+      gatewayEditor=createGatewayEditor(request,{
+        onSaved:record=>{const current=gateways.find(item=>item.id===record.id);if(current)Object.assign(current,record);renderDeviceRows();},
+        onClose:()=>void closeDeviceEditor('gateways'),
+        onCloudUpdated:()=>{void refresh();},
+      });
+    }
+    const expanding=openedGatewayId!==id;
+    openedGatewayId=id;lastGatewayQuery=Date.now();
+    mountLockEditor();
+    const target=root.querySelector<HTMLElement>('#admin-gateway-editor');
+    if(expanding && target && !matchMedia('(prefers-reduced-motion:reduce)').matches){
+      const height=target.getBoundingClientRect().height;target.style.overflow='clip';
+      void target.animate([{maxHeight:'0px'},{maxHeight:`${height}px`}],{duration:650,easing:'cubic-bezier(.2,.8,.2,1)'}).finished.finally(()=>{target.style.overflow='';}).catch(()=>{});
+    }
+    target?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth',block:'nearest'});
+  }
+  async function closeDeviceEditor(kind:'locks'|'gateways'): Promise<void> {
+    if(editorClosing)return;
+    editorClosing=true;
+    const target=root.querySelector<HTMLElement>(kind==='locks'?'#admin-lock-editor':'#admin-gateway-editor');
+    if(target && !matchMedia('(prefers-reduced-motion:reduce)').matches){
+      const height=target.getBoundingClientRect().height;
+      target.getAnimations().forEach(animation=>animation.cancel());target.style.overflow='clip';
+      await target.animate([{maxHeight:`${height}px`},{maxHeight:'0px'}],{duration:650,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'}).finished.catch(()=>{});
+    }
+    if(kind==='locks'){openedLockId=null;lockEditor?.dispose();lockEditor=undefined;}
+    else {openedGatewayId=null;gatewayEditor?.dispose();gatewayEditor=undefined;}
+    target?.replaceChildren();target?.getAnimations().forEach(animation=>animation.cancel());
+    if(target)target.style.overflow='';editorClosing=false;
+  }
   async function refresh(focusSelector = captureFocus()): Promise<void> {
     const button=root.querySelector<HTMLButtonElement>('#admin-refresh');if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
     try {
       if (view === 'members' && loaded) { await memberPanel.refresh(); return; }
       const [a,b,c,d,e]=await Promise.all([request<Overview>('/api/admin/overview'),request<{items:Cabinet[]}>('/api/admin/cabinets'),request<{items:Lock[]}>('/api/admin/locks'),request<{items:Gateway[]}>('/api/admin/gateways'),request<{items:Tool[]}>('/api/admin/tools')]);
+      if(disposed || forbidden)return;
       overview=a;cabinets=b.items;locks=c.items;gateways=d.items;tools=e.items;
       if ((!toolCabinetInitialized && cabinets.length) || (toolCabinet && !cabinets.some(cabinet=>String(cabinet.id)===toolCabinet))) {
         const initialCabinet = cabinets.find(cabinet=>cabinet.code==='A') ?? cabinets[0];
         toolCabinet = initialCabinet ? String(initialCabinet.id) : '';
         toolCabinetInitialized = Boolean(initialCabinet);
       }
-      loaded=true;shell(focusSelector);if(view==='loans')await loadLoans();
+      loaded=true;
+      if(view==='devices' && root.querySelector('#admin-device-list'))renderDeviceRows();
+      else shell(focusSelector);
+      if(view==='loans')await loadLoans();
+      schedulePolling();
     } catch(error){if(!loaded){const target=root.querySelector('#admin-content');if(target){target.innerHTML=empty('加载失败','点击右上角刷新重试。');target.removeAttribute('aria-busy');}}fail(error);} finally {if(button){button.disabled=false;button.removeAttribute('aria-busy');if(button.isConnected)restoreFocus(focusSelector);}}
   }
   async function deviceAction(button: HTMLButtonElement): Promise<void> {
-    if(deviceBusy)return;
+    if(deviceBusy || editorBusy())return;
     const {adminAction:action,id,kind}=button.dataset;
     const name=locks.find(item=>String(item.id)===id)?.name ?? '此设备';
-    if(action!=='status' && !window.confirm(`确认向“${name}”发送${action==='unlock'?'开锁':'关锁'}请求？`))return;
+    if(action!=='status' && !await confirmDialog({title:action==='unlock'?'打开柜锁':'关闭柜锁',message:`向“${name}”发送${action==='unlock'?'开锁':'关锁'}请求？`,confirmLabel:action==='unlock'?'确认开锁':'确认关锁'}))return;
+    if(disposed || deviceBusy || editorBusy())return;
     setDeviceBusy(true);
     try {
       const result=await request<{message:string}>(kind==='gateways'?`/api/admin/gateways/${id}/status`:`/api/admin/locks/${id}/actions`,{method:'POST',body:JSON.stringify(kind==='gateways'?{}:{action}),signal:AbortSignal.timeout(60000)});
-      notice(result.message);
+      notice(action==='status'?'状态请求完成。':result.message);
       await refresh();
     } catch(error) {
       if(action!=='status' && (error instanceof TypeError || error instanceof DOMException))notice('开关锁结果未确认，请现场核实或请求状态；不要重复发送指令。',true);
@@ -271,22 +402,71 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   }
   function setDeviceBusy(value: boolean): void {
     deviceBusy=value;
-    root.querySelectorAll<HTMLButtonElement>('[data-admin-action],#admin-sync-devices').forEach(button=>button.disabled=value);
+    root.querySelectorAll<HTMLButtonElement>('[data-admin-action],#admin-sync-devices,#admin-request-lock-status').forEach(button=>button.disabled=value);
   }
-  async function syncDevices(button: HTMLButtonElement): Promise<void> {
-    if(deviceBusy)return;
-    setDeviceBusy(true);button.setAttribute('aria-busy','true');
+  async function syncDevices(button?: HTMLButtonElement, automatic=false, propagateError=false): Promise<void> {
+    if(deviceBusy || editorBusy()){
+      if(propagateError)throw new Error('正在处理设备请求，请稍候再同步。');
+      return;
+    }
+    lastDeviceSync=Date.now();
+    setDeviceBusy(true);button?.setAttribute('aria-busy','true');
     try {
       const result=await request<{locks_added:number;locks_updated:number;gateways_added:number;gateways_updated:number}>('/api/admin/ttlock/sync',{method:'POST',body:'{}',signal:AbortSignal.timeout(120000)});
       await refresh();
       const lockCount=result.locks_added+result.locks_updated, gatewayCount=result.gateways_added+result.gateways_updated;
-      notice(`已同步 ${lockCount} 把锁、${gatewayCount} 个网关。${lockCount?'':'请确认连接的是添加锁时使用的通通锁账号。'}`);
-    } catch(error) { fail(error); }
-    finally { setDeviceBusy(false);button.removeAttribute('aria-busy'); }
+      if(!automatic)notice(`已同步 ${lockCount} 把锁、${gatewayCount} 个网关。${lockCount?'':'请确认连接的是添加锁时使用的通通锁账号。'}`);
+    } catch(error) { if(propagateError)throw error;if(!automatic || forbidden)fail(error); }
+    finally { setDeviceBusy(false);button?.removeAttribute('aria-busy'); }
+  }
+  async function requestDeviceStatuses(automatic=false): Promise<void> {
+    if(deviceBusy || editorBusy())return;
+    const targets=[...locks.map(item=>({item,kind:'locks'})),...gateways.map(item=>({item,kind:'gateways'}))]
+      .filter(({item,kind})=>item.cloud_available && (automatic || kind===(deviceTab==='gateways'?'gateways':'locks')));
+    if(!targets.length){if(!automatic)showToast('请先同步可用的设备。','info');return;}
+    lastStatusQuery=Date.now();setDeviceBusy(true);
+    const button=root.querySelector('#admin-request-lock-status');button?.setAttribute('aria-busy','true');
+    let failed=0;
+    try {
+      for(const {item,kind} of targets){
+        if(disposed || (automatic && !pollingEligible()))break;
+        try {
+          const result=await request<DeviceState>(kind==='locks'?`/api/admin/locks/${item.id}/actions`:`/api/admin/gateways/${item.id}/status`,{method:'POST',body:kind==='locks'?'{"action":"status"}':'{}',signal:AbortSignal.timeout(60000)});
+          Object.assign(item,result);
+        } catch(error){failed++;if(forbidden){fail(error);break;}if(!automatic)fail(error);}
+      }
+      renderDeviceRows();
+      if(!automatic && !failed)notice('状态请求完成。');
+    } finally {setDeviceBusy(false);button?.removeAttribute('aria-busy');}
+  }
+  function pollingEligible(): boolean {
+    return !disposed && !forbidden && !document.hidden && root.isConnected && view==='devices' && loaded && !!overview?.hardware_configured;
+  }
+  function schedulePolling(): void {
+    if(pollingTimer)clearTimeout(pollingTimer);
+    if(disposed || document.hidden || view!=='devices')return;
+    pollingTimer=setTimeout(()=>void pollDevices(),15000);
+  }
+  async function pollDevices(): Promise<void> {
+    if(pollRunning)return;
+    pollRunning=true;
+    try {
+      if(!pollingEligible() || deviceBusy || editorClosing || editorBusy() || document.querySelector('dialog[open]'))return;
+      const current=Date.now();
+      if(current-lastDeviceSync>=autoIntervals.sync)await syncDevices(undefined,true);
+      if(pollingEligible() && current-lastStatusQuery>=autoIntervals.status)await requestDeviceStatuses(true);
+      if(pollingEligible() && openedLockId && deviceTab==='locks' && lockEditor && !lockEditor.isDirty() && current-lastParameterQuery>=autoIntervals.parameters){
+        lastParameterQuery=Date.now();await lockEditor.refresh({automatic:true});
+      }
+      if(pollingEligible() && openedGatewayId && deviceTab==='gateways' && gatewayEditor && !gatewayEditor.isDirty() && current-lastGatewayQuery>=autoIntervals.parameters){
+        lastGatewayQuery=Date.now();await gatewayEditor.refresh({automatic:true});
+      }
+    } finally {pollRunning=false;schedulePolling();}
   }
   async function remove(kind: Resource,id:number,button:HTMLButtonElement): Promise<void> {
     const noun={cabinets:'柜子',locks:'锁',gateways:'网关',tools:'工具'}[kind];
-    if(!window.confirm(`确认删除这个${noun}？有关联或未归还记录时，系统可能拒绝删除。历史借还记录将保留。`))return;
+    if(!await confirmDialog({title:`删除${noun}`,message:`确认删除这个${noun}？有关联或未归还记录时无法删除，历史借还记录将保留。`,confirmLabel:'删除',danger:true}))return;
+    if(disposed)return;
     button.disabled=true;
     try{await request(`/api/admin/${kind}/${id}`,{method:'DELETE'});await refresh(`[data-add="${kind}"]`);notice(`${noun}已删除。`);}catch(error){fail(error);}finally{button.disabled=false;}
   }
@@ -322,8 +502,8 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       dialog.remove();
       if (previousFocus?.isConnected) previousFocus.focus({preventScroll:true});
     });
-    dialog.querySelector('.adm-dialog-close')?.addEventListener('click',()=>dialog.close());
-    dialog.querySelector('[data-cancel]')?.addEventListener('click',()=>dialog.close());
+    dialog.querySelector('.adm-dialog-close')?.addEventListener('click',()=>void closeDialog(dialog));
+    dialog.querySelector('[data-cancel]')?.addEventListener('click',()=>void closeDialog(dialog));
     form.addEventListener('submit',async event=>{
       event.preventDefault();
       if (busy || cooldownUntil > Date.now() || !validateForm(form)) return;
@@ -367,7 +547,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
           throw new Error(message);
         }
         form.reset();
-        if (!closed) dialog.close();
+        if (!closed) void closeDialog(dialog);
         location.assign('/admin?passwordChanged=1');
       } catch(error) {
         showToast(errorMessage(error),'error');
@@ -378,9 +558,15 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       }
     });
     root.append(dialog);
-    dialog.showModal();
+    animateDialogCancel(dialog);dialog.showModal();
   }
   function edit(kind:Resource,id?:number):void {
+    if(kind==='locks' && id){void openLockEditor(id);return;}
+    if(kind==='gateways' && id){void openGatewayEditor(id);return;}
+    if((kind==='locks'||kind==='gateways') && !id){
+      void openDeviceOnboarding({kind,sync:()=>syncDevices(undefined,false,true),openSettings:()=>navigate('other')});
+      return;
+    }
     if(kind==='tools'&&!cabinets.length){notice('请先在“柜子与设备”中添加一个柜子。',true);return;}
     const source: Record<string,unknown>=(id?({cabinets,locks,gateways,tools}[kind] as unknown as Record<string,unknown>[]).find(item=>item.id===id):undefined)??{};
     const noun={cabinets:'柜子',locks:'锁',gateways:'网关',tools:'工具'}[kind];
@@ -396,14 +582,20 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       const generator=attachIconGenerator(target,request,{
         details:()=>({name:(form.elements.namedItem('name') as HTMLInputElement).value.trim(),description:(form.elements.namedItem('description') as HTMLTextAreaElement).value.trim(),...(id?{tool_id:id}:{})}),
         apply:image=>{generatedIcon=image;(form.elements.namedItem('image') as HTMLInputElement).value='';const clear=form.elements.namedItem('clear_image') as HTMLInputElement|null;if(clear)clear.checked=false;},
-        openSettings:()=>{if(window.confirm('关闭工具编辑并前往生图设置？未保存的工具修改会丢失。')){dialog.close();navigate('other');}},
+        openSettings:()=>void (async()=>{
+          if(!await confirmDialog({title:'前往生图设置',message:'关闭工具编辑并前往生图设置？未保存的工具修改会丢失。',confirmLabel:'前往设置',cancelLabel:'继续编辑'}))return;
+          if(disposed)return;
+          await closeDialog(dialog);
+          navigate('other');
+          root.querySelector('#admin-ai-settings h2')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth',block:'start'});
+        })(),
       });
       form.querySelector('[name="image"]')?.addEventListener('change',()=>{generatedIcon=undefined;generator.clearSelection();const clear=form.elements.namedItem('clear_image') as HTMLInputElement|null;if(clear)clear.checked=false;});
       form.querySelector('[name="clear_image"]')?.addEventListener('change',()=>{generatedIcon=undefined;generator.clearSelection();});
       dialog.addEventListener('close',()=>generator.dispose(),{once:true});
     }
     const returnFocusSelector = id ? `[data-edit="${kind}"][data-id="${id}"]` : `[data-add="${kind}"]`;
-    dialog.addEventListener('close',()=>{dialog.remove();if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});});dialog.querySelector('.adm-dialog-close')?.addEventListener('click',()=>dialog.close());dialog.querySelector('[data-cancel]')?.addEventListener('click',()=>dialog.close());
+    dialog.addEventListener('close',()=>{dialog.remove();if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});});dialog.querySelector('.adm-dialog-close')?.addEventListener('click',()=>void closeDialog(dialog));dialog.querySelector('[data-cancel]')?.addEventListener('click',()=>void closeDialog(dialog));
     wireValidation(dialog.querySelector<HTMLFormElement>('form')!);
     dialog.querySelector('form')!.addEventListener('submit',async event=>{
       event.preventDefault();const form=event.currentTarget as HTMLFormElement;if(!validateForm(form))return;const data=new FormData(form);const submit=form.querySelector<HTMLButtonElement>('[type="submit"]')!;submit.disabled=true;
@@ -415,9 +607,9 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
           payload.quantity=Number(payload.quantity);payload.cabinet_id=Number(payload.cabinet_id);payload.icon_data=data.has('clear_image')?null:generatedIcon??source.icon_data??null;
           const file=data.get('image');if(file instanceof File && file.size){if(file.size>512*1024||!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('请选择小于 512 KB 的 PNG、JPEG 或 WebP 图片。');payload.icon_data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('图片读取失败，请重新选择。'));reader.readAsDataURL(file);});}
         }
-        await request(`/api/admin/${kind}${id?`/${id}`:''}`,{method:id?'PATCH':'POST',body:JSON.stringify(payload)});dialog.close();await refresh(returnFocusSelector);notice(`${noun}已保存。`);
-      }catch(error){if(forbidden){dialog.close();fail(error);}else showToast(errorMessage(error),'error');}finally{submit.disabled=false;}
-    });dialog.showModal();
+        await request(`/api/admin/${kind}${id?`/${id}`:''}`,{method:id?'PATCH':'POST',body:JSON.stringify(payload)});void closeDialog(dialog);await refresh(returnFocusSelector);notice(`${noun}已保存。`);
+      }catch(error){if(forbidden){void closeDialog(dialog);fail(error);}else showToast(errorMessage(error),'error');}finally{submit.disabled=false;}
+    });animateDialogCancel(dialog);dialog.showModal();
   }
   shell();await refresh();
 }

@@ -3,11 +3,13 @@
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.auth import create_auth_router
+from app.auth import AuthManager
+from app.admin import create_admin_router
+from app.request_limits import AdminBodyLimitMiddleware
 
 
 def create_app(frontend_dist: Path | None = None) -> FastAPI:
@@ -38,7 +40,18 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
     def status() -> dict[str, str]:
         return {"authentication": "school_account", "lock_control": "not_configured"}
 
-    application.include_router(create_auth_router())
+    auth = AuthManager()
+    application.add_middleware(AdminBodyLimitMiddleware)
+    application.include_router(auth.router)
+    application.include_router(create_admin_router(auth.require_admin))
+
+    @application.middleware("http")
+    async def private_api_responses(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
     @application.get("/api/auth/login")
     @application.get("/api/auth/callback")
@@ -74,6 +87,7 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
         return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
     @application.get("/", include_in_schema=False)
+    @application.get("/admin", include_in_schema=False)
     def frontend_root() -> FileResponse:
         return frontend_index()
 

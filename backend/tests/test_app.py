@@ -9,6 +9,7 @@ from app.main import create_app
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("APP_VERSION", "test-release")
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "toolbox.sqlite3"))
     return TestClient(create_app(tmp_path / "missing-dist"))
 
 
@@ -59,7 +60,7 @@ def test_built_frontend_only_serves_known_entry_points(tmp_path: Path) -> None:
     (assets / "app.js").write_text("export {};", encoding="utf-8")
     client = TestClient(create_app(tmp_path))
 
-    for path in ("/", "/scan/cabinet-1"):
+    for path in ("/", "/admin", "/scan/cabinet-1"):
         response = client.get(path)
         assert response.status_code == 200
         assert response.text == page

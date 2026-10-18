@@ -17,7 +17,11 @@ def environment(tmp_path):
     path = tmp_path / "inventory.sqlite3"
     app = FastAPI()
     app.include_router(create_admin_router(lambda: None, path))
-    return TestClient(app), Database(path)
+    database = Database(path)
+    # Keep CRUD fixtures independent of the separately tested initial catalogue.
+    with database.transaction(write=True) as connection:
+        connection.execute("DELETE FROM tools")
+    return TestClient(app), database
 
 
 def create(client, kind, **values):

@@ -15,6 +15,7 @@ def environment(tmp_path):
     application = FastAPI()
     application.include_router(create_cabinet_router(lambda: identity, path))
     with database.transaction(write=True) as connection:
+        connection.execute("DELETE FROM tools")
         ids = {row["code"]: row["id"] for row in connection.execute("SELECT id,code FROM cabinets")}
         connection.execute("UPDATE cabinets SET notes='PRIVATE' WHERE code='A'")
         connection.execute("INSERT INTO cabinets (code,name) VALUES ('C-03','Third cabinet')")

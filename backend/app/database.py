@@ -86,6 +86,24 @@ class Database:
                     )
                 # A deleted or renamed cabinet must not reappear on restart.
                 connection.execute("INSERT INTO schema_migrations (name) VALUES (?)", (migration,))
+            inventory_migration = "initial_area_tools_v2"
+            if connection.execute("SELECT 1 FROM schema_migrations WHERE name=?", (inventory_migration,)).fetchone() is None:
+                # Initial editable inventory requested for A/B; no devices or loans are created.
+                initial_tools = (
+                    ("螺丝刀", "Screwdriver", "screwdriver"),
+                    ("卷尺", "Tape measure", "tape"),
+                    ("羊角锤", "Claw hammer", "hammer"),
+                    ("尖嘴钳", "Needle-nose pliers", "pliers"),
+                )
+                for cabinet in connection.execute("SELECT id FROM cabinets WHERE code IN ('A','B')").fetchall():
+                    for name, english, icon in initial_tools:
+                        connection.execute(
+                            """INSERT INTO tools (cabinet_id,name,name_en,quantity,unit,unit_en,icon)
+                                SELECT ?,?,?,1,'把','pc',?
+                                WHERE NOT EXISTS (SELECT 1 FROM tools WHERE cabinet_id=? AND name=?)""",
+                            (cabinet["id"], name, english, icon, cabinet["id"], name),
+                        )
+                connection.execute("INSERT INTO schema_migrations (name) VALUES (?)", (inventory_migration,))
 
     @contextmanager
     def connect(self):

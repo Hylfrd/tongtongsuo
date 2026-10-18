@@ -130,7 +130,7 @@
 .adm-footer svg { width:18px; height:18px; }
 .adm-dialog { --adm-ink:#203e4c; --adm-muted:#526b78; --adm-line:#d8e5e9; --adm-cyan:#087c9c; width:min(620px,calc(100% - 32px)); max-height:calc(100dvh - 40px); margin:auto; padding:0; overflow:auto; border:0; border-radius:12px; color:var(--adm-ink); background:#fff; box-shadow:0 16px 60px #16364730; }
 .adm-dialog::backdrop { background:#1e354551; }
-.adm-dialog[open] { animation:adm-dialog-enter 180ms cubic-bezier(.16,1,.3,1); }
+.adm-dialog[open] { animation:adm-dialog-enter 340ms cubic-bezier(.16,1,.3,1); }
 .adm-edit-form { padding:24px; }
 .adm-dialog-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
 .adm-dialog-head h2 { font-size:22px; line-height:1.4; }
@@ -248,3 +248,8 @@
   .adm-account-actions #admin-password svg { display:none; }
   .adm-account-actions svg { width:15px; height:15px; }
 }
+
+/* Form feedback is inline color plus toast; controls retain keyboard focus. */
+.adm-field :is(input,select,textarea):focus,.adm-filter :is(input,select,textarea):focus { outline:none; box-shadow:none; border-color:#087c9c; }
+.adm-field :is(input,select,textarea)[aria-invalid="true"],.adm-filter :is(input,select,textarea)[aria-invalid="true"] { border-color:#bd473d; background:#fff3f1; }
+.adm-field :is(input,select,textarea)[aria-invalid="true"]:focus,.adm-filter :is(input,select,textarea)[aria-invalid="true"]:focus { border-color:#a82f25; background:#fff3f1; }

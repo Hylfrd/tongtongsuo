@@ -1,5 +1,6 @@
 import './admin.css';
 import { showToast } from './toast';
+import { validateForm, clearFieldError, markFieldError } from './validation';
 import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
 import { icon, githubIcon, type IconName } from './icons';
@@ -23,6 +24,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   let overview: Overview | null = null;
   let toolCabinet = '', deviceTab: 'cabinets' | 'locks' | 'gateways' = 'cabinets';
   let loaded = false, forbidden = false, loanRequest = 0;
+  let passwordChangePending = false;
   let filters = {q:'', cabinet_id:'', status:'all', sort:'borrowed_at', direction:'desc'};
   const titles: Record<View, string> = {overview:'概览',devices:'柜子与设备',tools:'工具管理',loans:'借还记录'};
 
@@ -93,7 +95,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       restoreFocus(focusSelector);
       currentContent.getAnimations().forEach(animation=>animation.cancel());
       if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        currentContent.animate([{opacity:.65,transform:'translateY(3px)'},{opacity:1,transform:'translateY(0)'}],{duration:200,easing:'cubic-bezier(.16,1,.3,1)'});
+        currentContent.animate([{opacity:.65,transform:'translateY(3px)'},{opacity:1,transform:'translateY(0)'}],{duration:340,easing:'cubic-bezier(.16,1,.3,1)'});
       }
       return;
     }
@@ -115,7 +117,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       const visible = tools.filter(tool=>!toolCabinet || String(tool.cabinet_id)===toolCabinet);
       return `<div class="adm-toolbar"><label class="adm-filter">所在柜子<select id="admin-tool-cabinet">${options(cabinets,toolCabinet,'全部柜子')}</select></label><button class="adm-button" data-add="tools">添加工具 ${icon('toolbox')}</button></div>${visible.length?`<div class="adm-tools">${visible.map(tool=>`<article class="adm-tool"><div class="adm-tool-art">${toolArt(tool)}</div><div class="adm-tool-body"><span class="adm-meta">${escape(cabinetName(tool.cabinet_id))}</span><h2>${escape(tool.name)}</h2>${tool.description ? `<p>${escape(tool.description)}</p>` : ''}<div class="adm-inventory"><strong>${tool.available_quantity}<small>${escape(tool.unit || '件')}可借</small></strong><span>总计 ${tool.quantity} ${escape(tool.unit || '件')} · 借出 ${tool.borrowed_quantity} ${escape(tool.unit || '件')}</span></div>${tool.borrowers.length?`<details class="adm-borrowers"><summary>查看 ${tool.borrowers.length} 位借用人</summary>${tool.borrowers.map(person=>`<p><strong>${escape(person.name)}</strong> ${escape(person.school_code)} · ${person.quantity} ${escape(tool.unit || '件')}<br><span>${escape(formatDate(person.borrowed_at))}</span></p>`).join('')}</details>`:''}${tool.notes?`<p class="adm-tool-note">备注：${escape(tool.notes)}</p>`:''}${controls('tools',tool.id)}</div></article>`).join('')}</div>`:empty('暂无工具',cabinets.length ? '' : '请先添加柜子。',`<button class="adm-text" data-add="tools">添加工具 ${icon('arrow')}</button>`)}`;
     }
-    return `<form class="adm-loan-filters" id="admin-loan-filters"><label class="adm-filter adm-search">搜索<input type="search" name="q" value="${escape(filters.q)}" placeholder="姓名、人员编号或工具名称" maxlength="100"></label><label class="adm-filter">柜子<select name="cabinet_id">${options(cabinets,filters.cabinet_id,'全部柜子')}</select></label><label class="adm-filter">归还情况<select name="status">${[['all','全部记录'],['active','尚未归还'],['returned','已归还']].map(([key,label])=>`<option value="${key}" ${filters.status===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="adm-filter">排序<select name="sort">${[['borrowed_at','借用时间'],['returned_at','归还时间'],['days','借用天数'],['user_name','使用人'],['cabinet_name','柜子'],['tool_name','工具']].map(([key,label])=>`<option value="${key}" ${filters.sort===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="adm-filter">顺序<select name="direction"><option value="desc" ${filters.direction==='desc'?'selected':''}>降序</option><option value="asc" ${filters.direction==='asc'?'selected':''}>升序</option></select></label><button class="adm-button" type="submit">查询</button></form><div class="adm-section-heading"><h2>借还明细 <span id="admin-loan-count">${loans.length} 条</span></h2><button class="adm-outline" id="admin-export">导出 Excel ${icon('arrow')}</button></div><div id="admin-loan-result">${loanTable()}</div>`;
+    return `<form class="adm-loan-filters" id="admin-loan-filters" novalidate><label class="adm-filter adm-search">搜索<input type="search" name="q" value="${escape(filters.q)}" placeholder="姓名、人员编号或工具名称" maxlength="100"></label><label class="adm-filter">柜子<select name="cabinet_id">${options(cabinets,filters.cabinet_id,'全部柜子')}</select></label><label class="adm-filter">归还情况<select name="status">${[['all','全部记录'],['active','尚未归还'],['returned','已归还']].map(([key,label])=>`<option value="${key}" ${filters.status===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="adm-filter">排序<select name="sort">${[['borrowed_at','借用时间'],['returned_at','归还时间'],['days','借用天数'],['user_name','使用人'],['cabinet_name','柜子'],['tool_name','工具']].map(([key,label])=>`<option value="${key}" ${filters.sort===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="adm-filter">顺序<select name="direction"><option value="desc" ${filters.direction==='desc'?'selected':''}>降序</option><option value="asc" ${filters.direction==='asc'?'selected':''}>升序</option></select></label><button class="adm-button" type="submit">查询</button></form><div class="adm-section-heading"><h2>借还明细 <span id="admin-loan-count">${loans.length} 条</span></h2><button class="adm-outline" id="admin-export">导出 Excel ${icon('arrow')}</button></div><div id="admin-loan-result">${loanTable()}</div>`;
   }
   function cabinetCards(): string {
     if(!cabinets.length) return empty('暂无柜子','',`<button class="adm-outline" data-add="cabinets">添加柜子</button>`);
@@ -137,6 +139,14 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     try {const result=await request<{items:Loan[]}>(`/api/admin/loans?${loanQuery()}`); if(version!==loanRequest || view!=='loans')return; loans=result.items; const current=root.querySelector('#admin-loan-result'); if(current){current.innerHTML=loanTable();current.removeAttribute('aria-busy');} const count=root.querySelector('#admin-loan-count'); if(count) count.textContent=`${loans.length} 条`;}
     catch(error){if(version===loanRequest){if(target) target.removeAttribute('aria-busy'); fail(error);}}
   }
+  function wireValidation(form: HTMLFormElement): void {
+    const clear = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) clearFieldError(target);
+    };
+    form.addEventListener('input',clear);
+    form.addEventListener('change',clear);
+  }
   function bindContent(): void {
     root.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.go as View)));
     root.querySelectorAll<HTMLButtonElement>('[data-device-tab]').forEach(button=>button.addEventListener('click',()=>{deviceTab=button.dataset.deviceTab as 'cabinets'|'locks'|'gateways';shell(`[data-device-tab="${deviceTab}"]`, true);}));
@@ -146,7 +156,9 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     root.querySelectorAll<HTMLButtonElement>('[data-copy-scan]').forEach(button=>button.addEventListener('click',()=>{const url = new URL(`/scan/${encodeURIComponent(button.dataset.copyScan!)}`,location.origin).href; void navigator.clipboard.writeText(url).then(()=>notice('柜子链接已复制。')).catch(()=>showToast('复制失败，请打开柜子入口后复制地址。','error'));}));
     root.querySelectorAll<HTMLButtonElement>('[data-admin-action]').forEach(button=>button.addEventListener('click',()=>void deviceAction(button)));
     root.querySelector<HTMLSelectElement>('#admin-tool-cabinet')?.addEventListener('change',event=>{toolCabinet=(event.target as HTMLSelectElement).value;shell('#admin-tool-cabinet');});
-    root.querySelector<HTMLFormElement>('#admin-loan-filters')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget as HTMLFormElement);filters={q:String(form.get('q')??'').trim(),cabinet_id:String(form.get('cabinet_id')??''),status:String(form.get('status')),sort:String(form.get('sort')),direction:String(form.get('direction'))};void loadLoans();});
+    const loanForm = root.querySelector<HTMLFormElement>('#admin-loan-filters');
+    if (loanForm) wireValidation(loanForm);
+    loanForm?.addEventListener('submit',event=>{event.preventDefault();if (!validateForm(event.currentTarget as HTMLFormElement)) return;const form=new FormData(event.currentTarget as HTMLFormElement);filters={q:String(form.get('q')??'').trim(),cabinet_id:String(form.get('cabinet_id')??''),status:String(form.get('status')),sort:String(form.get('sort')),direction:String(form.get('direction'))};void loadLoans();});
     root.querySelector<HTMLButtonElement>('#admin-export')?.addEventListener('click',event=>void exportLoans(event.currentTarget as HTMLButtonElement));
   }
   async function refresh(focusSelector = captureFocus()): Promise<void> {
@@ -174,11 +186,16 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     try{const response=await fetch(`/api/admin/loans/export.xlsx?${loanQuery()}`,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(30000)});if(!response.ok){if(response.status===401||response.status===403)forbidden=true;throw new Error('导出未完成，请确认登录状态后重试。');}const file=await response.blob();const url=URL.createObjectURL(file);const link=document.createElement('a');link.href=url;const disposition=response.headers.get('Content-Disposition')??'';let filename='';try{const encoded=disposition.match(/filename\*=UTF-8''([^;]+)/i);const plain=disposition.match(/filename="([^"]+)"/i);filename=encoded?decodeURIComponent(encoded[1]):plain?.[1]??'';}catch{/* Use a safe local filename. */}link.download=/^[^\/\\\x00-\x1f]{1,160}\.xlsx$/i.test(filename)?filename:`zhengya-loans-${new Date().toISOString().slice(0,10)}.xlsx`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);notice('Excel 已导出。');}catch(error){fail(error);}finally{button.disabled=false;}
   }
   function changePassword(): void {
+    if (passwordChangePending) {
+      showToast('密码正在保存，请稍候。','info');
+      return;
+    }
     const dialog = document.createElement('dialog');
     dialog.className = 'adm-dialog adm-password-dialog';
     dialog.setAttribute('aria-labelledby','admin-password-title');
-    dialog.innerHTML = `<form class="adm-edit-form"><div class="adm-dialog-head"><h2 id="admin-password-title">修改密码</h2><button type="button" class="adm-dialog-close" aria-label="关闭">×</button></div><div class="adm-password-fields"><label class="adm-field">当前密码<input name="current_password" type="password" autocomplete="current-password" minlength="5" maxlength="256" required></label><label class="adm-field">新密码<input name="new_password" type="password" autocomplete="new-password" minlength="5" maxlength="256" required></label><label class="adm-field">确认新密码<input name="confirm_password" type="password" autocomplete="new-password" minlength="5" maxlength="256" required></label></div><div class="adm-form-actions"><button type="button" class="adm-outline" data-cancel>取消</button><button type="submit" class="adm-button">保存密码</button></div></form>`;
+    dialog.innerHTML = `<form class="adm-edit-form" novalidate><div class="adm-dialog-head"><h2 id="admin-password-title">修改密码</h2><button type="button" class="adm-dialog-close" aria-label="关闭">×</button></div><div class="adm-password-fields"><label class="adm-field">当前密码<input name="current_password" type="password" autocomplete="current-password" minlength="5" maxlength="256" required></label><label class="adm-field">新密码<input name="new_password" type="password" autocomplete="new-password" minlength="5" maxlength="256" required></label><label class="adm-field">确认新密码<input name="confirm_password" type="password" autocomplete="new-password" minlength="5" maxlength="256" required></label></div><div class="adm-form-actions"><button type="button" class="adm-outline" data-cancel>取消</button><button type="submit" class="adm-button">保存密码</button></div></form>`;
     const form = dialog.querySelector<HTMLFormElement>('form')!;
+    wireValidation(form);
     const submit = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
     const previousFocus = document.activeElement as HTMLElement | null;
     let timer: ReturnType<typeof setInterval> | undefined;
@@ -200,16 +217,18 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     dialog.querySelector('[data-cancel]')?.addEventListener('click',()=>dialog.close());
     form.addEventListener('submit',async event=>{
       event.preventDefault();
-      if (busy || cooldownUntil > Date.now()) return;
+      if (busy || cooldownUntil > Date.now() || !validateForm(form)) return;
       const current = form.elements.namedItem('current_password') as HTMLInputElement;
       const password = form.elements.namedItem('new_password') as HTMLInputElement;
       const confirm = form.elements.namedItem('confirm_password') as HTMLInputElement;
       if (password.value !== confirm.value) {
+        markFieldError(confirm);
         showToast('两次输入的新密码不一致。','error');
         confirm.focus();
         return;
       }
       busy = true;
+      passwordChangePending = true;
       updateSubmit();
       try {
         const response = await fetch('/api/auth/admin/password',{
@@ -230,6 +249,8 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
           let message = response.status === 429 ? '尝试过于频繁，请稍后重试。' : response.status === 401 ? '登录已过期，请重新登录。' : '密码修改失败，请重试。';
           try {
             const result = await response.json();
+            if (!closed && result.detail?.code === 'CURRENT_PASSWORD_INVALID') markFieldError(current);
+            if (!closed && result.detail?.code === 'PASSWORD_MISMATCH') markFieldError(confirm);
             if (typeof result.detail === 'string') message = result.detail;
             else if (typeof result.detail?.message === 'string') message = result.detail.message;
             else if (Array.isArray(result.detail)) message = '密码需要 5–256 个字符。';
@@ -243,6 +264,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
         showToast(errorMessage(error),'error');
       } finally {
         busy = false;
+        passwordChangePending = false;
         if (!closed) updateSubmit();
       }
     });
@@ -256,12 +278,13 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     const text=(name:string,label:string,required=false,max=120,type='text')=>`<label class="adm-field">${label}${required?' <span aria-hidden="true">*</span>':''}<input name="${name}" type="${type}" value="${escape(source[name])}" maxlength="${max}" ${required?'required':''} ${type==='number'?'min="0" max="100000" step="1"':''}></label>`;
     const area=(name:string,label:string)=>`<label class="adm-field adm-wide">${label}<textarea name="${name}" rows="3" maxlength="2000">${escape(source[name])}</textarea></label>`;
     let fields=kind==='tools'?`<label class="adm-field adm-wide">所在柜子 <span aria-hidden="true">*</span><select name="cabinet_id" required>${options(cabinets,source.cabinet_id??toolCabinet,'请选择柜子')}</select></label>${text('name','工具名称',true)}${text('name_en','英文名称（选填）')}<label class="adm-field">总数量 <span aria-hidden="true">*</span><input name="quantity" type="number" min="0" max="100000" step="1" value="${escape(source.quantity??1)}" required></label><label class="adm-field">单位 <span aria-hidden="true">*</span><input name="unit" value="${escape(source.unit || '件')}" maxlength="16" required list="admin-tool-units"><datalist id="admin-tool-units"><option value="件"><option value="把"><option value="个"><option value="套"><option value="卷"><option value="副"></datalist></label>${text('unit_en','英文单位（选填）',false,32)}<label class="adm-field">工具图标<select name="icon">${Object.entries(toolIcons).map(([key,value])=>`<option value="${key}" ${source.icon===key?'selected':''}>${value.label}</option>`).join('')}</select></label><label class="adm-field">自定义图片<input name="image" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG / JPEG / WebP，最大 512 KB</small></label>${source.icon_data?'<label class="adm-checkbox adm-wide"><input type="checkbox" name="clear_image">移除现有自定义图片</label>':''}${area('description','描述 / 使用说明')}${area('description_en','英文描述（选填）')}${area('notes','备注')}`:`${text('code','内部编号',true,64)}${text('name',`${noun}名称`,true)}${kind==='cabinets'?`<label class="adm-field">柜子分组<input name="group_name" value="${escape(source.group_name)}" maxlength="120" list="admin-cabinet-groups"><datalist id="admin-cabinet-groups">${[...new Set(['A区','B区',...cabinets.map(cabinet=>cabinet.group_name).filter(Boolean)])].map(group=>`<option value="${escape(group)}">`).join('')}</datalist></label>${text('location','所在位置')}`:kind==='locks'?`<label class="adm-field">所在柜子<select name="cabinet_id">${options(cabinets,source.cabinet_id,'暂不分配')}</select></label><label class="adm-field">绑定网关<select name="gateway_id">${options(gateways,source.gateway_id,'暂不绑定')}</select></label>${text('provider_lock_id','通通锁设备编号（可留空）',false,64)}`:text('provider_gateway_id','通通锁网关编号（可留空）',false,64)}${area('notes','备注')}`;
-    const dialog=document.createElement('dialog');dialog.className='adm-dialog';dialog.setAttribute('aria-labelledby','admin-dialog-title');dialog.innerHTML=`<form class="adm-edit-form"><div class="adm-dialog-head"><div><h2 id="admin-dialog-title">${id?'编辑':'添加'}${noun}</h2></div><button type="button" class="adm-dialog-close" aria-label="关闭">×</button></div><div class="adm-form-grid">${fields}</div><div class="adm-form-actions"><button type="button" class="adm-outline" data-cancel>取消</button><button type="submit" class="adm-button">保存${noun}</button></div></form>`;
+    const dialog=document.createElement('dialog');dialog.className='adm-dialog';dialog.setAttribute('aria-labelledby','admin-dialog-title');dialog.innerHTML=`<form class="adm-edit-form" novalidate><div class="adm-dialog-head"><div><h2 id="admin-dialog-title">${id?'编辑':'添加'}${noun}</h2></div><button type="button" class="adm-dialog-close" aria-label="关闭">×</button></div><div class="adm-form-grid">${fields}</div><div class="adm-form-actions"><button type="button" class="adm-outline" data-cancel>取消</button><button type="submit" class="adm-button">保存${noun}</button></div></form>`;
     root.append(dialog);const previousFocus=document.activeElement as HTMLElement|null;
     const returnFocusSelector = id ? `[data-edit="${kind}"][data-id="${id}"]` : `[data-add="${kind}"]`;
     dialog.addEventListener('close',()=>{dialog.remove();if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});});dialog.querySelector('.adm-dialog-close')?.addEventListener('click',()=>dialog.close());dialog.querySelector('[data-cancel]')?.addEventListener('click',()=>dialog.close());
+    wireValidation(dialog.querySelector<HTMLFormElement>('form')!);
     dialog.querySelector('form')!.addEventListener('submit',async event=>{
-      event.preventDefault();const form=event.currentTarget as HTMLFormElement;const data=new FormData(form);const submit=form.querySelector<HTMLButtonElement>('[type="submit"]')!;submit.disabled=true;
+      event.preventDefault();const form=event.currentTarget as HTMLFormElement;if(!validateForm(form))return;const data=new FormData(form);const submit=form.querySelector<HTMLButtonElement>('[type="submit"]')!;submit.disabled=true;
       try{
         const payload:Record<string,unknown>={};data.forEach((value,key)=>{if(typeof value==='string'&&key!=='clear_image')payload[key]=value.trim();});
         if(kind==='locks'){payload.cabinet_id=payload.cabinet_id?Number(payload.cabinet_id):null;payload.gateway_id=payload.gateway_id?Number(payload.gateway_id):null;payload.provider_lock_id=payload.provider_lock_id||null;}

@@ -7,7 +7,7 @@ const paths = {
   check: '<path d="m5 12 4 4L19 6"/>',
   lock: '<rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>',
   open: '<rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 7-2m-3 10v2"/>',
-  refresh: '<path d="M20 7v5h-5M4 17v-5h5M5.5 7a7 7 0 0 1 11.6-2L20 8M4 16l2.9 3A7 7 0 0 0 18.5 17"/>',
+  refresh: '<path d="M19 9a8 8 0 1 0-1 9"/><path d="M19 3v6h-6"/>',
   toolbox: '<rect x="3" y="8" width="18" height="13" rx="3"/><path d="M8 8V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3M3 13h18m-12-2v4m6-4v4"/>',
   return: '<path d="M5 7h10a5 5 0 0 1 0 10H9M5 7l4-4M5 7l4 4"/>',
   tape: '<path d="M4 16V9a6 6 0 0 1 12 0v7H4Zm12-5h5v5h-5m-3 0v3H3v-3"/><circle cx="10" cy="9" r="2"/>',

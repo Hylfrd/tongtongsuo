@@ -15,7 +15,7 @@ export function showToast(message: string, kind: Kind = 'error'): void {
     stack = document.createElement('div');
     stack.id = 'tts-toasts';
     stack.className = 'toast-stack';
-    stack.setAttribute('aria-label', '通知');
+    stack.setAttribute('aria-label', document.documentElement.lang === 'en' ? 'Notifications' : '通知');
     if ('showPopover' in stack) stack.setAttribute('popover', 'manual');
     host.append(stack);
   } else if (stack.parentElement !== host) {
@@ -36,7 +36,7 @@ export function showToast(message: string, kind: Kind = 'error'): void {
   const dismiss = document.createElement('button');
   dismiss.type = 'button';
   dismiss.className = 'toast-dismiss';
-  dismiss.setAttribute('aria-label', '关闭通知');
+  dismiss.setAttribute('aria-label', document.documentElement.lang === 'en' ? 'Dismiss notification' : '关闭通知');
   dismiss.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m7 7 10 10M17 7 7 17"/></svg>';
   toast.append(symbol, text, dismiss);
   stack.append(toast);

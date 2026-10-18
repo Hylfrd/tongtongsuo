@@ -21,7 +21,7 @@ def test_health_is_liveness_not_integration_readiness(client: TestClient) -> Non
         "version": "test-release",
     }
     assert client.get("/api/status").json() == {
-        "authentication": "not_configured",
+        "authentication": "school_account",
         "lock_control": "not_configured",
     }
 

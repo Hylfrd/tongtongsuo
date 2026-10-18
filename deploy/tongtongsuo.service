@@ -9,6 +9,7 @@ WorkingDirectory=/var/www/tongtongsuo/current/backend
 EnvironmentFile=/var/www/tongtongsuo/current/release.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
+Environment=PUBLIC_ORIGIN=https://bnbu.hmcl-helper.cn
 ExecStart=/var/www/tongtongsuo/current/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 18731 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log
 Restart=on-failure
 RestartSec=3

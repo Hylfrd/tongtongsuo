@@ -1,4 +1,4 @@
-"""Deployable shell; authentication and physical lock control stay disabled."""
+"""Campus lock entry point; physical lock control remains disabled."""
 
 import os
 from pathlib import Path
@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+from app.auth import create_auth_router
 
 
 def create_app(frontend_dist: Path | None = None) -> FastAPI:
@@ -29,12 +31,14 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
 
     @application.get("/api/health")
     def health() -> dict[str, str]:
-        # Process liveness only: neither SSO nor TTLock is connected yet.
+        # Process liveness only; upstream services are not called here.
         return {"status": "ok", "service": "tongtongsuo", "version": version}
 
     @application.get("/api/status")
     def status() -> dict[str, str]:
-        return {"authentication": "not_configured", "lock_control": "not_configured"}
+        return {"authentication": "school_account", "lock_control": "not_configured"}
+
+    application.include_router(create_auth_router())
 
     @application.get("/api/auth/login")
     @application.get("/api/auth/callback")
@@ -43,7 +47,7 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
             status_code=503,
             detail={
                 "code": "AUTH_NOT_CONFIGURED",
-                "message": "学校身份认证尚未接入，暂时无法登录。",
+                "message": "请通过本项目登录表单验证学校账号；学校直接回调尚未接入。",
             },
         )
 

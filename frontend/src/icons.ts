@@ -1,4 +1,5 @@
 const paths = {
+  scan: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M4 12h16"/><rect x="7" y="7" width="3" height="3"/><path d="M14 7h3v3m-10 4v3h3m4-3h3v3"/>',
   arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
   back: '<path d="m12 5-7 7 7 7M5 12h15"/>',
   user: '<circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/>',

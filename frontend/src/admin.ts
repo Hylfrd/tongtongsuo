@@ -1,6 +1,6 @@
 import './admin.css';
 import { showToast } from './toast';
-import mascot from './assets/mascot.png';
+import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
 import { icon, githubIcon, type IconName } from './icons';
 

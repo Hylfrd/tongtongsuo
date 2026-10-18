@@ -5,13 +5,15 @@ import { licenseHref } from './license-navigation';
 import { validateForm, clearFieldError, markFieldError } from './validation';
 import { createAISettings, attachIconGenerator } from './ai-settings';
 import { createMembersPanel } from './member-settings';
+import { createTTLockSettings } from './ttlock-settings';
 import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
 import { icon, githubIcon, type IconName } from './icons';
 
 type Cabinet = { id: number; code: string; name: string; group_name: string; location: string; notes: string; lock_count: number; tool_count: number };
-type Gateway = { id: number; code: string; name: string; provider_gateway_id: string | null; notes: string; status: string };
-type Lock = { id: number; code: string; name: string; provider_lock_id: string | null; cabinet_id: number | null; gateway_id: number | null; notes: string; status: string };
+type DeviceState = { status: string; observed_at?: string | null; cloud_available?: boolean; electric_quantity?: number | null; cloud_gateways?: {provider_gateway_id: string; name: string}[] };
+type Gateway = DeviceState & { id: number; code: string; name: string; provider_gateway_id: string | null; notes: string };
+type Lock = DeviceState & { id: number; code: string; name: string; provider_lock_id: string | null; cabinet_id: number | null; gateway_id: number | null; notes: string };
 type Tool = { id: number; cabinet_id: number; name: string; name_en: string; description: string; description_en: string; unit: string; unit_en: string; notes: string; quantity: number; icon: string; icon_data: string | null; available_quantity: number; borrowed_quantity: number; borrowers: {name: string; school_code: string | null; quantity: number; borrowed_at: string}[] };
 type Loan = { id: number; user_name: string; school_code: string | null; cabinet_id: number; cabinet_name: string; cabinet_code: string; tool_id: number; tool_name: string; quantity: number; borrowed_at: string; returned_at: string | null; days: number };
 type Overview = { cabinet_count: number; lock_count: number; gateway_count: number; tool_count: number; active_loan_count: number; hardware_configured: boolean; user_count?: number | null; average_borrow_ratio?: number | null; borrow_visit_count?: number | null; borrow_visits_per_day?: number | null; today_borrow_count?: number | null; today_return_count?: number | null };
@@ -34,6 +36,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   let deviceTab: 'cabinets' | 'locks' | 'gateways' = 'cabinets';
   let loaded = false, forbidden = false, loanRequest = 0;
   let passwordChangePending = false;
+  let deviceBusy = false;
   const initialFilters = new URLSearchParams(location.search);
   let filters = {
     q:view === 'loans' ? (initialFilters.get('q') ?? '').slice(0,120) : '',
@@ -46,12 +49,13 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   const titles: Record<View, string> = {overview:'概览',devices:'柜子与设备',tools:'工具管理',loans:'借还记录',members:'成员管理',other:'其他'};
   const aiSettings = createAISettings(request);
   const memberPanel = createMembersPanel(request);
-  window.addEventListener('pagehide',()=>{aiSettings.dispose();memberPanel.dispose();},{once:true});
+  const ttlockSettings = createTTLockSettings(request);
+  window.addEventListener('pagehide',()=>{aiSettings.dispose();memberPanel.dispose();ttlockSettings.dispose();},{once:true});
 
   async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await fetch(url, {signal:AbortSignal.timeout(15000), ...init, credentials:'same-origin', cache:'no-store', headers:{...(init?.body ? {'Content-Type':'application/json'} : {}), ...init?.headers}});
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) { forbidden = true; aiSettings.dispose(); memberPanel.dispose(); }
+      if (response.status === 401 || response.status === 403) { forbidden = true; aiSettings.dispose(); memberPanel.dispose(); ttlockSettings.dispose(); }
       let message = response.status === 401 ? '登录已过期，请重新登录。' : response.status === 403 ? '当前账号没有管理权限。' : `请求未完成（${response.status}），请稍后重试。`;
       try { const body = await response.json(); if (typeof body.detail === 'string') message = body.detail; else if (body.detail && typeof body.detail.message === 'string') message = body.detail.message; else if (Array.isArray(body.detail)) message = '填写内容不符合要求，请检查字段长度、格式和数量。'; } catch { /* Keep a useful message for proxy errors. */ }
       throw new Error(message);
@@ -74,7 +78,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   function compactCabinetCode(code: string, name: string): boolean { return name === code || name === `${code}区`; }
   function itemName(item: {name:string;code?:string}): string { return item.code && !compactCabinetCode(item.code,item.name) ? `${item.code} · ${item.name}` : item.name; }
   function cabinetName(id: number | null): string { const cabinet = cabinets.find(item=>item.id===id); return cabinet ? itemName(cabinet) : '尚未分配柜子'; }
-  function gatewayName(id: number | null): string { return gateways.find(item=>item.id===id)?.name ?? '未绑定网关'; }
+  function cloudGateways(item: Lock): string { return item.cloud_gateways?.length ? item.cloud_gateways.map(gateway=>gateway.name || `网关 ${gateway.provider_gateway_id}`).join('、') : '尚未发现关联网关'; }
   function options(items: {id:number;name:string;code?:string}[], selected: unknown, blank: string): string { return `<option value="">${blank}</option>` + items.map(item=>`<option value="${item.id}" ${String(selected)===String(item.id)?'selected':''}>${escape(itemName(item))}</option>`).join(''); }
   function empty(title: string, copy: string, action?: string): string { return `<div class="adm-empty">${icon('toolbox')}<h3>${title}</h3>${copy ? `<p>${copy}</p>` : ''}${action ?? ''}</div>`; }
   function controls(kind: Resource, id: number): string { return `<div class="adm-row-actions"><button class="adm-text" data-edit="${kind}" data-id="${id}">编辑</button><button class="adm-text adm-danger" data-delete="${kind}" data-id="${id}">删除</button></div>`; }
@@ -140,7 +144,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   }
   function content(): string {
     if(view==='members') return '<div id="admin-members-panel"></div>';
-    if(view==='other') return `<div id="admin-ai-settings"></div><section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section>`;
+    if(view==='other') return `<div id="admin-ttlock-settings"></div><div id="admin-ai-settings"></div><section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section>`;
     if(view==='overview') {
       const stats = overview!;
       const value = (number: number | null | undefined): number => typeof number === 'number' && Number.isFinite(number) ? Math.max(0,number) : 0;
@@ -148,7 +152,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       const borrowPercent = (Math.min(1,value(stats.average_borrow_ratio)) * 100).toLocaleString('zh-CN',{maximumFractionDigits:1});
       return `<section class="adm-stats" aria-label="当前管理概况"><div><strong>${stats.cabinet_count}</strong><span>共享柜子</span></div><div><strong>${stats.tool_count}</strong><span>工具种类</span></div><div><strong>${stats.active_loan_count}</strong><span>未归还记录</span></div><div><strong>${stats.lock_count}<small> / ${stats.gateway_count}</small></strong><span>锁 / 网关</span></div></section><section class="adm-stats adm-stats-usage" aria-label="使用情况"><div title="按实际借用记录中的学号去重，不含仅登录用户"><strong>${count(stats.user_count)}<small> 人</small></strong><span>累计用户</span></div><div title="各有库存柜子的当前借出件数占库存件数比例的算术平均"><strong>${borrowPercent}<small>%</small></strong><span>平均外借比例</span></div><div title="同一学号、柜子和借用时间计一次；日均从首笔借用到北京时间今天，含首尾日期"><strong>${count(stats.borrow_visit_count)}<small> 人次 / ${count(stats.borrow_visits_per_day,1)} 人次/天</small></strong><span>累计借用 / 每日频率</span></div><div title="按北京时间当日统计；同一学号、柜子和操作时间计一次"><strong>${count(stats.today_borrow_count)}<small> / ${count(stats.today_return_count)}</small></strong><span>今日借用 / 今日归还</span></div></section><div class="adm-section-heading"><h2>柜子一览</h2><button class="adm-text" data-add="cabinets">添加柜子 ${icon('arrow')}</button></div>${cabinetCards()}`;
     }
-    if(view==='devices') return `<div class="adm-tabs" aria-label="设备类别">${([['cabinets','柜子'],['locks','锁'],['gateways','网关']] as [Resource,string][]).map(([key,label])=>`<button data-device-tab="${key}" aria-pressed="${deviceTab===key}">${label}<span>${key==='cabinets'?cabinets.length:key==='locks'?locks.length:gateways.length}</span></button>`).join('')}</div><div class="adm-section-heading"><h2>${deviceTab==='cabinets'?'柜子与分组':deviceTab==='locks'?'锁设备':'网关设备'}</h2><button class="adm-button" data-add="${deviceTab}">添加${deviceTab==='cabinets'?'柜子':deviceTab==='locks'?'锁':'网关'}</button></div>${deviceTab==='cabinets'?cabinetCards():deviceTable(deviceTab)}`;
+    if(view==='devices') return `<div class="adm-tabs" aria-label="设备类别">${([['cabinets','柜子'],['locks','锁'],['gateways','网关']] as [Resource,string][]).map(([key,label])=>`<button data-device-tab="${key}" aria-pressed="${deviceTab===key}">${label}<span>${key==='cabinets'?cabinets.length:key==='locks'?locks.length:gateways.length}</span></button>`).join('')}</div><div class="adm-section-heading"><h2>${deviceTab==='cabinets'?'柜子与分组':deviceTab==='locks'?'锁设备':'网关设备'}</h2><div class="adm-device-actions"><button class="adm-outline" id="admin-sync-devices" ${deviceBusy?'disabled':''}>${icon('refresh')}同步通通锁</button><button class="adm-button" data-add="${deviceTab}">添加${deviceTab==='cabinets'?'柜子':deviceTab==='locks'?'锁':'网关'}</button></div></div>${deviceTab==='cabinets'?cabinetCards():deviceTable(deviceTab)}`;
     if(view==='tools') {
       const search = toolSearch.toLocaleLowerCase();
       const visible = tools.filter(tool=>(!toolCabinet || String(tool.cabinet_id)===toolCabinet) && (!search || [tool.name,tool.name_en,tool.description,tool.description_en,tool.notes].some(value=>value?.toLocaleLowerCase().includes(search))))
@@ -163,10 +167,15 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     cabinets.forEach(cabinet=>{const group=cabinet.group_name || '未分组'; groups.set(group,[...(groups.get(group)??[]),cabinet]);});
     return '<div class="adm-cabinet-groups">' + [...groups].map(([group,items])=>`<section class="adm-cabinet-group">${items.length > 1 || items[0].name !== group ? `<h3>${escape(group)}<span>${items.length} 个柜子</span></h3>` : ''}<div class="adm-cabinets">${items.map(cabinet=>`<article class="adm-cabinet"><div class="adm-cabinet-top"><h2>${escape(cabinet.name)}</h2>${icon('toolbox')}</div>${!compactCabinetCode(cabinet.code,cabinet.name) ? `<span class="adm-cabinet-code">${escape(cabinet.code)}</span>` : ''}${cabinet.location ? `<p>${escape(cabinet.location)}</p>` : ''}<div class="adm-cabinet-summary"><span>${cabinet.lock_count} 把锁</span><span>${cabinet.tool_count} 种工具</span></div>${locks.filter(lock=>lock.cabinet_id===cabinet.id).map(lock=>`<div class="adm-bound-lock">${icon('lock')}<span>${escape(lock.code)} · ${escape(lock.name)}</span><span>状态未知</span></div>`).join('')}${cabinet.notes?`<p class="adm-tool-note">${escape(cabinet.notes)}</p>`:''}<div class="adm-scan-links"><button class="adm-text" data-copy-scan="${escape(cabinet.code)}">复制链接</button><a href="/m/scan/${encodeURIComponent(cabinet.code)}" target="_blank" rel="noopener">手机预览</a>${controls('cabinets',cabinet.id)}</div></article>`).join('')}</div></section>`).join('') + '</div>';
   }
+  function deviceStatus(item: DeviceState): string {
+    const labels: Record<string,string> = {unlocked:'已解锁',locked:'已闭锁',online:'在线',offline:'离线',unknown:'未知'};
+    const label = item.cloud_available === false ? '未同步' : labels[item.status] ?? '未知';
+    return `<span class="adm-badge ${item.status==='online'||item.status==='locked'?'is-returned':item.status==='unlocked'?'is-active':''}">${label}</span>${item.observed_at?`<small title="上次查询结果，不代表实时门状态">${escape(formatDate(item.observed_at))}</small>`:''}`;
+  }
   function deviceTable(kind: 'locks'|'gateways'): string {
     const items = kind==='locks'?locks:gateways;
     if(!items.length) return empty(kind==='locks'?'暂无锁':'暂无网关','');
-    return `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="${kind==='locks'?'锁':'网关'}设备列表"><table class="adm-table"><thead><tr><th>设备 / 编号</th><th>${kind==='locks'?'柜子 / 网关':'云端设备编号'}</th><th>状态</th><th>设备操作</th><th>管理</th></tr></thead><tbody>${items.map(item=>`<tr><td><strong>${escape(item.name)}</strong><small>${escape(item.code)}</small></td><td>${kind==='locks'?`${escape(cabinetName((item as Lock).cabinet_id))}<small>${escape(gatewayName((item as Lock).gateway_id))}</small>`:escape((item as Gateway).provider_gateway_id || '未配置')}</td><td><span class="adm-badge">未知</span></td><td><div class="adm-device-actions">${kind==='locks'?`<button class="adm-outline" data-admin-action="unlock" data-id="${item.id}">${icon('open')}开锁</button><button class="adm-outline" data-admin-action="lock" data-id="${item.id}">${icon('lock')}关锁</button>`:''}<button class="adm-text" data-admin-action="status" data-kind="${kind}" data-id="${item.id}">请求状态</button></div></td><td>${controls(kind,item.id)}</td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="${kind==='locks'?'锁':'网关'}设备列表"><table class="adm-table"><thead><tr><th>设备 / 编号</th><th>${kind==='locks'?'柜子 / 网关':'云端设备编号'}</th><th>状态</th><th>设备操作</th><th>管理</th></tr></thead><tbody>${items.map(item=>`<tr><td><strong>${escape(item.name)}</strong><small>${escape(item.code)}</small></td><td>${kind==='locks'?`${escape(cabinetName((item as Lock).cabinet_id))}<small>${escape(cloudGateways(item as Lock))}</small>`:escape((item as Gateway).provider_gateway_id || '未配置')}</td><td>${deviceStatus(item)}</td><td><div class="adm-device-actions">${kind==='locks'?`<button class="adm-outline" data-admin-action="unlock" data-id="${item.id}" ${deviceBusy?'disabled':''}>${icon('open')}开锁</button><button class="adm-outline" data-admin-action="lock" data-id="${item.id}" ${deviceBusy?'disabled':''}>${icon('lock')}关锁</button>`:''}<button class="adm-text" data-admin-action="status" data-kind="${kind}" data-id="${item.id}" ${deviceBusy?'disabled':''}>请求状态</button></div></td><td>${controls(kind,item.id)}</td></tr>`).join('')}</tbody></table></div>`;
   }
   function loanTable(): string { return loans.length ? `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="借还记录"><table class="adm-table adm-loan-table"><thead><tr><th>使用人 / 编号</th><th>柜子</th><th>工具 / 数量</th><th>借用时间</th><th>归还时间</th><th>借用天数</th><th>状态</th></tr></thead><tbody>${loans.map(loan=>`<tr><td><strong>${escape(loan.user_name)}</strong><small>${escape(loan.school_code || '无人员编号')}</small></td><td>${escape(loan.cabinet_name)}${!compactCabinetCode(loan.cabinet_code,loan.cabinet_name) ? `<small>${escape(loan.cabinet_code)}</small>` : ''}</td><td>${escape(loan.tool_name)}<small>${loan.quantity} ${escape(tools.find(tool=>tool.id===loan.tool_id)?.unit || '件')}</small></td><td>${escape(formatDate(loan.borrowed_at))}</td><td>${escape(formatDate(loan.returned_at))}</td><td>${loan.days} 天</td><td><span class="adm-badge ${loan.returned_at?'is-returned':'is-active'}">${loan.returned_at?'已归还':'借用中'}</span></td></tr>`).join('')}</tbody></table></div>` : empty('暂无借还记录',''); }
   function loanQuery(): string { return new URLSearchParams(Object.entries(filters).filter(([,value])=>!!value)).toString(); }
@@ -190,11 +199,14 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     form.addEventListener('change',clear);
   }
   function bindContent(): void {
+    const ttlockTarget = root.querySelector('#admin-ttlock-settings');
+    if(ttlockTarget)ttlockSettings.mount(ttlockTarget);
     const memberTarget = root.querySelector('#admin-members-panel');
     if(memberTarget)memberPanel.mount(memberTarget);
     const aiTarget = root.querySelector('#admin-ai-settings');
     if(aiTarget)aiSettings.mount(aiTarget);
     root.querySelector('#admin-password')?.addEventListener('click',changePassword);
+    root.querySelector<HTMLButtonElement>('#admin-sync-devices')?.addEventListener('click',event=>void syncDevices(event.currentTarget as HTMLButtonElement));
     root.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.go as View)));
     root.querySelectorAll<HTMLButtonElement>('[data-device-tab]').forEach(button=>button.addEventListener('click',()=>{deviceTab=button.dataset.deviceTab as 'cabinets'|'locks'|'gateways';shell(`[data-device-tab="${deviceTab}"]`, true);}));
     root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach(button=>button.addEventListener('click',()=>edit(button.dataset.add as Resource)));
@@ -241,11 +253,36 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     } catch(error){if(!loaded){const target=root.querySelector('#admin-content');if(target){target.innerHTML=empty('加载失败','点击右上角刷新重试。');target.removeAttribute('aria-busy');}}fail(error);} finally {if(button){button.disabled=false;button.removeAttribute('aria-busy');if(button.isConnected)restoreFocus(focusSelector);}}
   }
   async function deviceAction(button: HTMLButtonElement): Promise<void> {
+    if(deviceBusy)return;
     const {adminAction:action,id,kind}=button.dataset;
-    if(action!=='status' && !window.confirm(`确认向此设备发送${action==='unlock'?'开锁':'关锁'}请求？`))return;
-    button.disabled=true;
-    try{await request(kind==='gateways'?`/api/admin/gateways/${id}/status`:`/api/admin/locks/${id}/actions`,{method:'POST',body:JSON.stringify(kind==='gateways'?{}:{action})});notice('请求已提交；请核实设备实际状态。');}
-    catch(error){fail(error);}finally{button.disabled=false;}
+    const name=locks.find(item=>String(item.id)===id)?.name ?? '此设备';
+    if(action!=='status' && !window.confirm(`确认向“${name}”发送${action==='unlock'?'开锁':'关锁'}请求？`))return;
+    setDeviceBusy(true);
+    try {
+      const result=await request<{message:string}>(kind==='gateways'?`/api/admin/gateways/${id}/status`:`/api/admin/locks/${id}/actions`,{method:'POST',body:JSON.stringify(kind==='gateways'?{}:{action}),signal:AbortSignal.timeout(60000)});
+      notice(result.message);
+      await refresh();
+    } catch(error) {
+      if(action!=='status' && (error instanceof TypeError || error instanceof DOMException))notice('开关锁结果未确认，请现场核实或请求状态；不要重复发送指令。',true);
+      else fail(error);
+      // Read cached observations only; never resend a physical command on failure.
+      if(!forbidden)await refresh();
+    } finally { setDeviceBusy(false); }
+  }
+  function setDeviceBusy(value: boolean): void {
+    deviceBusy=value;
+    root.querySelectorAll<HTMLButtonElement>('[data-admin-action],#admin-sync-devices').forEach(button=>button.disabled=value);
+  }
+  async function syncDevices(button: HTMLButtonElement): Promise<void> {
+    if(deviceBusy)return;
+    setDeviceBusy(true);button.setAttribute('aria-busy','true');
+    try {
+      const result=await request<{locks_added:number;locks_updated:number;gateways_added:number;gateways_updated:number}>('/api/admin/ttlock/sync',{method:'POST',body:'{}',signal:AbortSignal.timeout(120000)});
+      await refresh();
+      const lockCount=result.locks_added+result.locks_updated, gatewayCount=result.gateways_added+result.gateways_updated;
+      notice(`已同步 ${lockCount} 把锁、${gatewayCount} 个网关。${lockCount?'':'请确认连接的是添加锁时使用的通通锁账号。'}`);
+    } catch(error) { fail(error); }
+    finally { setDeviceBusy(false);button.removeAttribute('aria-busy'); }
   }
   async function remove(kind: Resource,id:number,button:HTMLButtonElement): Promise<void> {
     const noun={cabinets:'柜子',locks:'锁',gateways:'网关',tools:'工具'}[kind];
@@ -349,7 +386,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     const noun={cabinets:'柜子',locks:'锁',gateways:'网关',tools:'工具'}[kind];
     const text=(name:string,label:string,required=false,max=120,type='text')=>`<label class="adm-field">${label}${required?' <span aria-hidden="true">*</span>':''}<input name="${name}" type="${type}" value="${escape(source[name])}" maxlength="${max}" ${required?'required':''} ${type==='number'?'min="0" max="100000" step="1"':''}></label>`;
     const area=(name:string,label:string)=>`<label class="adm-field adm-wide">${label}<textarea name="${name}" rows="3" maxlength="2000">${escape(source[name])}</textarea></label>`;
-    let fields=kind==='tools'?`<label class="adm-field adm-wide">所在柜子 <span aria-hidden="true">*</span><select name="cabinet_id" required>${options(cabinets,source.cabinet_id??toolCabinet,'请选择柜子')}</select></label>${text('name','工具名称',true)}${text('name_en','英文名称（选填）')}<label class="adm-field">总数量 <span aria-hidden="true">*</span><input name="quantity" type="number" min="0" max="100000" step="1" value="${escape(source.quantity??1)}" required></label><label class="adm-field">单位 <span aria-hidden="true">*</span><input name="unit" value="${escape(source.unit || '件')}" maxlength="16" required list="admin-tool-units"><datalist id="admin-tool-units"><option value="件"><option value="把"><option value="个"><option value="套"><option value="卷"><option value="副"></datalist></label>${text('unit_en','英文单位（选填）',false,32)}<label class="adm-field">工具图标<select name="icon">${Object.entries(toolIcons).map(([key,value])=>`<option value="${key}" ${source.icon===key?'selected':''}>${value.label}</option>`).join('')}</select></label><label class="adm-field">自定义图片<input name="image" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG / JPEG / WebP，最大 512 KB</small></label>${source.icon_data?'<label class="adm-checkbox adm-wide"><input type="checkbox" name="clear_image">移除现有自定义图片</label>':''}${area('description','描述 / 使用说明')}${area('description_en','英文描述（选填）')}${area('notes','备注')}`:`${text('code','内部编号',true,64)}${text('name',`${noun}名称`,true)}${kind==='cabinets'?`<label class="adm-field">柜子分组<input name="group_name" value="${escape(source.group_name)}" maxlength="120" list="admin-cabinet-groups"><datalist id="admin-cabinet-groups">${[...new Set(['A区','B区',...cabinets.map(cabinet=>cabinet.group_name).filter(Boolean)])].map(group=>`<option value="${escape(group)}">`).join('')}</datalist></label>${text('location','所在位置')}`:kind==='locks'?`<label class="adm-field">所在柜子<select name="cabinet_id">${options(cabinets,source.cabinet_id,'暂不分配')}</select></label><label class="adm-field">绑定网关<select name="gateway_id">${options(gateways,source.gateway_id,'暂不绑定')}</select></label>${text('provider_lock_id','通通锁设备编号（可留空）',false,64)}`:text('provider_gateway_id','通通锁网关编号（可留空）',false,64)}${area('notes','备注')}`;
+    let fields=kind==='tools'?`<label class="adm-field adm-wide">所在柜子 <span aria-hidden="true">*</span><select name="cabinet_id" required>${options(cabinets,source.cabinet_id??toolCabinet,'请选择柜子')}</select></label>${text('name','工具名称',true)}${text('name_en','英文名称（选填）')}<label class="adm-field">总数量 <span aria-hidden="true">*</span><input name="quantity" type="number" min="0" max="100000" step="1" value="${escape(source.quantity??1)}" required></label><label class="adm-field">单位 <span aria-hidden="true">*</span><input name="unit" value="${escape(source.unit || '件')}" maxlength="16" required list="admin-tool-units"><datalist id="admin-tool-units"><option value="件"><option value="把"><option value="个"><option value="套"><option value="卷"><option value="副"></datalist></label>${text('unit_en','英文单位（选填）',false,32)}<label class="adm-field">工具图标<select name="icon">${Object.entries(toolIcons).map(([key,value])=>`<option value="${key}" ${source.icon===key?'selected':''}>${value.label}</option>`).join('')}</select></label><label class="adm-field">自定义图片<input name="image" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG / JPEG / WebP，最大 512 KB</small></label>${source.icon_data?'<label class="adm-checkbox adm-wide"><input type="checkbox" name="clear_image">移除现有自定义图片</label>':''}${area('description','描述 / 使用说明')}${area('description_en','英文描述（选填）')}${area('notes','备注')}`:`${text('code','内部编号',true,64)}${text('name',`${noun}名称`,true)}${kind==='cabinets'?`<label class="adm-field">柜子分组<input name="group_name" value="${escape(source.group_name)}" maxlength="120" list="admin-cabinet-groups"><datalist id="admin-cabinet-groups">${[...new Set(['A区','B区',...cabinets.map(cabinet=>cabinet.group_name).filter(Boolean)])].map(group=>`<option value="${escape(group)}">`).join('')}</datalist></label>${text('location','所在位置')}`:kind==='locks'?`<label class="adm-field">所在柜子<select name="cabinet_id">${options(cabinets,source.cabinet_id,'暂不分配')}</select></label><div class="adm-field">关联网关<span>${escape(cloudGateways(source as Lock))}</span><small>由通通锁自动发现，同步后更新。</small></div>${text('provider_lock_id','通通锁设备编号（可留空）',false,64)}`:text('provider_gateway_id','通通锁网关编号（可留空）',false,64)}${area('notes','备注')}`;
     const dialog=document.createElement('dialog');dialog.className='adm-dialog';dialog.setAttribute('aria-labelledby','admin-dialog-title');dialog.innerHTML=`<form class="adm-edit-form" novalidate><div class="adm-dialog-head"><div><h2 id="admin-dialog-title">${id?'编辑':'添加'}${noun}</h2></div><button type="button" class="adm-dialog-close" aria-label="关闭">${closeIcon}</button></div><div class="adm-form-grid">${fields}</div><div class="adm-form-actions"><button type="button" class="adm-outline" data-cancel>取消</button><button type="submit" class="adm-button">保存${noun}</button></div></form>`;
     root.append(dialog);const previousFocus=document.activeElement as HTMLElement|null;
     let generatedIcon: string | undefined;
@@ -372,7 +409,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       event.preventDefault();const form=event.currentTarget as HTMLFormElement;if(!validateForm(form))return;const data=new FormData(form);const submit=form.querySelector<HTMLButtonElement>('[type="submit"]')!;submit.disabled=true;
       try{
         const payload:Record<string,unknown>={};data.forEach((value,key)=>{if(typeof value==='string'&&key!=='clear_image')payload[key]=value.trim();});
-        if(kind==='locks'){payload.cabinet_id=payload.cabinet_id?Number(payload.cabinet_id):null;payload.gateway_id=payload.gateway_id?Number(payload.gateway_id):null;payload.provider_lock_id=payload.provider_lock_id||null;}
+        if(kind==='locks'){payload.cabinet_id=payload.cabinet_id?Number(payload.cabinet_id):null;payload.provider_lock_id=payload.provider_lock_id||null;}
         if(kind==='gateways')payload.provider_gateway_id=payload.provider_gateway_id||null;
         if(kind==='tools'){
           payload.quantity=Number(payload.quantity);payload.cabinet_id=Number(payload.cabinet_id);payload.icon_data=data.has('clear_image')?null:generatedIcon??source.icon_data??null;

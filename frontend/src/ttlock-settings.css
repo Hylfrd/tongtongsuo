@@ -1,0 +1,10 @@
+.adm-ttlock-settings { padding:22px 0; border-top:1px solid var(--adm-line); }
+.adm-ttlock-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:22px; }
+.adm-ttlock-heading h2 { font-size:18px; }
+.adm-ttlock-heading [data-connection-state] { color:var(--adm-muted); font-size:13px; overflow-wrap:anywhere; text-align:right; }
+.adm-ttlock-heading .is-connected { color:var(--adm-accent,#386c7b); }
+.adm-ttlock-settings .adm-field { display:flex; flex-direction:column; align-items:stretch; }
+.adm-ttlock-settings .adm-field input { min-height:40px; }
+.adm-ttlock-help { margin:20px 0 14px!important; color:var(--adm-muted); font-size:12px; line-height:1.65; }
+.adm-ttlock-actions { display:flex; justify-content:flex-end; margin-top:18px; }
+.adm-ttlock-settings input:disabled { opacity:.6; cursor:not-allowed; }

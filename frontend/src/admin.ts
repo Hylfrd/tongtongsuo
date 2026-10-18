@@ -28,7 +28,8 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   let view: View = section === 'devices' || section === 'tools' || section === 'loans' || section === 'other' ? section : 'overview';
   let cabinets: Cabinet[] = [], locks: Lock[] = [], gateways: Gateway[] = [], tools: Tool[] = [], loans: Loan[] = [];
   let overview: Overview | null = null;
-  let toolCabinet = '', deviceTab: 'cabinets' | 'locks' | 'gateways' = 'cabinets';
+  let toolCabinet = '', toolSearch = '', toolCabinetInitialized = false;
+  let deviceTab: 'cabinets' | 'locks' | 'gateways' = 'cabinets';
   let loaded = false, forbidden = false, loanRequest = 0;
   let passwordChangePending = false;
   let filters = {q:'', cabinet_id:'', status:'all', sort:'borrowed_at', direction:'desc'};
@@ -134,10 +135,12 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     }
     if(view==='devices') return `<div class="adm-tabs" aria-label="设备类别">${([['cabinets','柜子'],['locks','锁'],['gateways','网关']] as [Resource,string][]).map(([key,label])=>`<button data-device-tab="${key}" aria-pressed="${deviceTab===key}">${label}<span>${key==='cabinets'?cabinets.length:key==='locks'?locks.length:gateways.length}</span></button>`).join('')}</div><div class="adm-section-heading"><h2>${deviceTab==='cabinets'?'柜子与分组':deviceTab==='locks'?'锁设备':'网关设备'}</h2><button class="adm-button" data-add="${deviceTab}">添加${deviceTab==='cabinets'?'柜子':deviceTab==='locks'?'锁':'网关'}</button></div>${deviceTab==='cabinets'?cabinetCards():deviceTable(deviceTab)}`;
     if(view==='tools') {
-      const visible = tools.filter(tool=>!toolCabinet || String(tool.cabinet_id)===toolCabinet);
-      return `<div class="adm-toolbar"><label class="adm-filter">所在柜子<select id="admin-tool-cabinet">${options(cabinets,toolCabinet,'全部柜子')}</select></label><button class="adm-button" data-add="tools">添加工具 ${icon('toolbox')}</button></div>${visible.length?`<div class="adm-tools">${visible.map(tool=>`<article class="adm-tool"><div class="adm-tool-art">${toolArt(tool)}</div><div class="adm-tool-body"><span class="adm-meta">${escape(cabinetName(tool.cabinet_id))}</span><h2>${escape(tool.name)}</h2>${tool.description ? `<p>${escape(tool.description)}</p>` : ''}<div class="adm-inventory"><strong>${tool.available_quantity}<small>${escape(tool.unit || '件')}可借</small></strong><span>总计 ${tool.quantity} ${escape(tool.unit || '件')} · 借出 ${tool.borrowed_quantity} ${escape(tool.unit || '件')}</span></div>${tool.borrowers.length?`<details class="adm-borrowers"><summary>查看 ${tool.borrowers.length} 位借用人</summary>${tool.borrowers.map(person=>`<p><strong>${escape(person.name)}</strong> ${escape(person.school_code)} · ${person.quantity} ${escape(tool.unit || '件')}<br><span>${escape(formatDate(person.borrowed_at))}</span></p>`).join('')}</details>`:''}${tool.notes?`<p class="adm-tool-note">备注：${escape(tool.notes)}</p>`:''}${controls('tools',tool.id)}</div></article>`).join('')}</div>`:empty('暂无工具',cabinets.length ? '' : '请先添加柜子。',`<button class="adm-text" data-add="tools">添加工具 ${icon('arrow')}</button>`)}`;
+      const search = toolSearch.toLocaleLowerCase();
+      const visible = tools.filter(tool=>(!toolCabinet || String(tool.cabinet_id)===toolCabinet) && (!search || [tool.name,tool.name_en,tool.description,tool.description_en,tool.notes].some(value=>value?.toLocaleLowerCase().includes(search))))
+        .sort((left,right)=>Number(left.available_quantity<=0)-Number(right.available_quantity<=0));
+      return `<div class="adm-toolbar adm-tool-toolbar"><form id="admin-tool-filters" class="adm-tool-filters" novalidate><label class="adm-filter">所在柜子<select id="admin-tool-cabinet">${options(cabinets,toolCabinet,'全部柜子')}</select></label><label class="adm-filter">搜索工具<input id="admin-tool-search" name="q" type="search" value="${escape(toolSearch)}" placeholder="名称、描述或备注" maxlength="100"></label><button class="adm-outline" type="submit">搜索</button></form><button class="adm-button" data-add="tools">添加工具 ${icon('toolbox')}</button></div>${visible.length?`<div class="adm-tools">${visible.map(tool=>`<article class="adm-tool${tool.available_quantity<=0?' is-unavailable':''}"><div class="adm-tool-art">${toolArt(tool)}</div><div class="adm-tool-body"><span class="adm-meta">${escape(cabinetName(tool.cabinet_id))}</span><h2>${escape(tool.name)}</h2>${tool.description ? `<p>${escape(tool.description)}</p>` : ''}<div class="adm-inventory"><strong>${tool.available_quantity}<small>${escape(tool.unit || '件')}可借</small></strong><span>总计 ${tool.quantity} ${escape(tool.unit || '件')} · 借出 ${tool.borrowed_quantity} ${escape(tool.unit || '件')}</span></div>${tool.borrowers.length?`<details class="adm-borrowers"><summary>查看 ${tool.borrowers.length} 位借用人</summary>${tool.borrowers.map(person=>`<p><strong>${escape(person.name)}</strong> ${escape(person.school_code)} · ${person.quantity} ${escape(tool.unit || '件')}<br><span>${escape(formatDate(person.borrowed_at))}</span></p>`).join('')}</details>`:''}${tool.notes?`<p class="adm-tool-note">备注：${escape(tool.notes)}</p>`:''}<div class="adm-tool-actions">${controls('tools',tool.id)}<button class="adm-text" data-tool-loans="${tool.id}">借阅记录</button></div></div></article>`).join('')}</div>`:empty(toolSearch?'没有匹配的工具':'暂无工具',cabinets.length ? '' : '请先添加柜子。',`<button class="adm-text" data-add="tools">添加工具 ${icon('arrow')}</button>`)}`;
     }
-    return `<form class="adm-loan-filters" id="admin-loan-filters" novalidate><label class="adm-filter adm-search">搜索<input type="search" name="q" value="${escape(filters.q)}" placeholder="姓名、人员编号或工具名称" maxlength="100"></label><label class="adm-filter">柜子<select name="cabinet_id">${options(cabinets,filters.cabinet_id,'全部柜子')}</select></label><label class="adm-filter">归还情况<select name="status">${[['all','全部记录'],['active','尚未归还'],['returned','已归还']].map(([key,label])=>`<option value="${key}" ${filters.status===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="adm-filter">排序<select name="sort">${[['borrowed_at','借用时间'],['returned_at','归还时间'],['days','借用天数'],['user_name','使用人'],['cabinet_name','柜子'],['tool_name','工具']].map(([key,label])=>`<option value="${key}" ${filters.sort===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="adm-filter">顺序<select name="direction"><option value="desc" ${filters.direction==='desc'?'selected':''}>降序</option><option value="asc" ${filters.direction==='asc'?'selected':''}>升序</option></select></label><button class="adm-button" type="submit">查询</button></form><div class="adm-section-heading"><h2>借还明细 <span id="admin-loan-count">${loans.length} 条</span></h2><button class="adm-outline" id="admin-export">导出 Excel ${icon('arrow')}</button></div><div id="admin-loan-result">${loanTable()}</div>`;
+    return `<form class="adm-loan-filters" id="admin-loan-filters" novalidate><label class="adm-filter adm-search">搜索<input type="search" name="q" value="${escape(filters.q)}" placeholder="姓名、人员编号或工具名称" maxlength="120"></label><label class="adm-filter">柜子<select name="cabinet_id">${options(cabinets,filters.cabinet_id,'全部柜子')}</select></label><label class="adm-filter">归还情况<select name="status">${[['all','全部记录'],['active','尚未归还'],['returned','已归还']].map(([key,label])=>`<option value="${key}" ${filters.status===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="adm-filter">排序<select name="sort">${[['borrowed_at','借用时间'],['returned_at','归还时间'],['days','借用天数'],['user_name','使用人'],['cabinet_name','柜子'],['tool_name','工具']].map(([key,label])=>`<option value="${key}" ${filters.sort===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="adm-filter">顺序<select name="direction"><option value="desc" ${filters.direction==='desc'?'selected':''}>降序</option><option value="asc" ${filters.direction==='asc'?'selected':''}>升序</option></select></label><button class="adm-button" type="submit">查询</button></form><div class="adm-section-heading"><h2>借还明细 <span id="admin-loan-count">${loans.length} 条</span></h2><button class="adm-outline" id="admin-export">导出 Excel ${icon('arrow')}</button></div><div id="admin-loan-result">${loanTable()}</div>`;
   }
   function cabinetCards(): string {
     if(!cabinets.length) return empty('暂无柜子','',`<button class="adm-outline" data-add="cabinets">添加柜子</button>`);
@@ -176,7 +179,23 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     root.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach(button=>button.addEventListener('click',()=>void remove(button.dataset.delete as Resource,Number(button.dataset.id),button)));
     root.querySelectorAll<HTMLButtonElement>('[data-copy-scan]').forEach(button=>button.addEventListener('click',()=>{const url = new URL(`/scan/${encodeURIComponent(button.dataset.copyScan!)}`,location.origin).href; void navigator.clipboard.writeText(url).then(()=>notice('柜子链接已复制。')).catch(()=>showToast('复制失败，请检查浏览器剪贴板权限。','error'));}));
     root.querySelectorAll<HTMLButtonElement>('[data-admin-action]').forEach(button=>button.addEventListener('click',()=>void deviceAction(button)));
-    root.querySelector<HTMLSelectElement>('#admin-tool-cabinet')?.addEventListener('change',event=>{toolCabinet=(event.target as HTMLSelectElement).value;shell('#admin-tool-cabinet');});
+    const toolForm = root.querySelector<HTMLFormElement>('#admin-tool-filters');
+    toolForm?.addEventListener('submit',event=>{
+      event.preventDefault();
+      toolSearch = root.querySelector<HTMLInputElement>('#admin-tool-search')?.value.trim() ?? '';
+      shell('#admin-tool-search');
+    });
+    root.querySelector<HTMLSelectElement>('#admin-tool-cabinet')?.addEventListener('change',event=>{
+      toolCabinet = (event.target as HTMLSelectElement).value;
+      toolSearch = root.querySelector<HTMLInputElement>('#admin-tool-search')?.value.trim() ?? toolSearch;
+      shell('#admin-tool-cabinet');
+    });
+    root.querySelectorAll<HTMLButtonElement>('[data-tool-loans]').forEach(button=>button.addEventListener('click',()=>{
+      const tool = tools.find(item=>item.id===Number(button.dataset.toolLoans));
+      if (!tool) return;
+      filters = {q:tool.name,cabinet_id:String(tool.cabinet_id),status:'all',sort:'borrowed_at',direction:'desc'};
+      navigate('loans');
+    }));
     const loanForm = root.querySelector<HTMLFormElement>('#admin-loan-filters');
     if (loanForm) wireValidation(loanForm);
     loanForm?.addEventListener('submit',event=>{event.preventDefault();if (!validateForm(event.currentTarget as HTMLFormElement)) return;const form=new FormData(event.currentTarget as HTMLFormElement);filters={q:String(form.get('q')??'').trim(),cabinet_id:String(form.get('cabinet_id')??''),status:String(form.get('status')),sort:String(form.get('sort')),direction:String(form.get('direction'))};void loadLoans();});
@@ -186,7 +205,13 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     const button=root.querySelector<HTMLButtonElement>('#admin-refresh');if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
     try {
       const [a,b,c,d,e]=await Promise.all([request<Overview>('/api/admin/overview'),request<{items:Cabinet[]}>('/api/admin/cabinets'),request<{items:Lock[]}>('/api/admin/locks'),request<{items:Gateway[]}>('/api/admin/gateways'),request<{items:Tool[]}>('/api/admin/tools')]);
-      overview=a;cabinets=b.items;locks=c.items;gateways=d.items;tools=e.items;loaded=true;shell(focusSelector);if(view==='loans')await loadLoans();
+      overview=a;cabinets=b.items;locks=c.items;gateways=d.items;tools=e.items;
+      if ((!toolCabinetInitialized && cabinets.length) || (toolCabinet && !cabinets.some(cabinet=>String(cabinet.id)===toolCabinet))) {
+        const initialCabinet = cabinets.find(cabinet=>cabinet.code==='A') ?? cabinets[0];
+        toolCabinet = initialCabinet ? String(initialCabinet.id) : '';
+        toolCabinetInitialized = Boolean(initialCabinet);
+      }
+      loaded=true;shell(focusSelector);if(view==='loans')await loadLoans();
     } catch(error){if(!loaded){const target=root.querySelector('#admin-content');if(target){target.innerHTML=empty('加载失败','点击右上角刷新重试。');target.removeAttribute('aria-busy');}}fail(error);} finally {if(button){button.disabled=false;button.removeAttribute('aria-busy');if(button.isConnected)restoreFocus(focusSelector);}}
   }
   async function deviceAction(button: HTMLButtonElement): Promise<void> {

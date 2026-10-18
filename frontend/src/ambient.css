@@ -1,0 +1,63 @@
+.ambient-background {
+  position:absolute;
+  inset:0;
+  overflow:clip;
+  pointer-events:none;
+  z-index:-1;
+}
+.ambient-shape { position:absolute; pointer-events:none; }
+.ambient-cyan {
+  inset:0;
+  background:linear-gradient(145deg,#dceef0 29%,transparent 29%);
+  animation:ambient-cyan-drift 28s ease-in-out infinite;
+}
+.ambient-blue {
+  inset:0;
+  background:linear-gradient(126deg,transparent 71%,#dce8f3 71%);
+  animation:ambient-blue-drift 34s ease-in-out infinite;
+}
+.ambient-circle {
+  left:-180px;
+  bottom:-170px;
+  width:440px;
+  height:440px;
+  border-radius:44%;
+  background:#edf0da;
+  opacity:.7;
+  transform:rotate(-16deg);
+  animation:ambient-circle-drift 24s ease-in-out infinite;
+}
+.ambient-zheng {
+  right:-3%;
+  top:17%;
+  width:min(43vw,560px);
+  aspect-ratio:1;
+  background:#788891;
+  mask:url('./assets/zheng-watermark.png') center/contain no-repeat;
+  opacity:.12;
+  transform:rotate(-8deg);
+  animation:ambient-zheng-sway 18s ease-in-out infinite;
+}
+@keyframes ambient-cyan-drift {
+  0%,100% { transform:scale(1.05) translate(0,0); }
+  50% { transform:scale(1.05) translate(12px,-10px); }
+}
+@keyframes ambient-blue-drift {
+  0%,100% { transform:scale(1.05) translate(0,0); }
+  50% { transform:scale(1.05) translate(-14px,12px); }
+}
+@keyframes ambient-circle-drift {
+  0%,100% { transform:translate(0,0) rotate(-16deg); }
+  50% { transform:translate(18px,-14px) rotate(-10deg); }
+}
+@keyframes ambient-zheng-sway {
+  0%,100% { transform:translate(0,0) rotate(-8deg); }
+  50% { transform:translate(-7px,9px) rotate(-5deg); }
+}
+@media (max-width:760px) {
+  .ambient-zheng { display:none; }
+}
+.phone-preview .ambient-zheng { display:none; }
+@media (prefers-reduced-motion:reduce) {
+  .ambient-shape { animation:none; }
+}

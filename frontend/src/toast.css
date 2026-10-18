@@ -39,3 +39,5 @@
 @keyframes toast-leave { to { opacity: 0; transform: translateY(-8px) scale(.98); } }
 @media (max-width: 720px) { .toast-stack { inset: 12px 12px auto; width: auto; } .toast { padding: 13px 8px 13px 14px; gap: 8px; } .toast p { font-size: 13px; } }
 @media (prefers-reduced-motion: reduce) { .toast, .toast.is-leaving { animation: none; } }
+
+body:has(.phone-preview) .toast-stack { right:max(12px,calc((100vw - 430px) / 2 + 12px)); left:auto; width:min(406px,calc(100vw - 24px)); top:12px; }

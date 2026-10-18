@@ -6,17 +6,15 @@ import math
 import sqlite3
 import unicodedata
 from datetime import datetime, timedelta, timezone
-from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import quote
-from xml.etree.ElementTree import Element, SubElement, tostring
-from zipfile import ZIP_DEFLATED, ZipFile
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.database import Database
+from app.loan_export import workbook
 
 
 Name = Annotated[str, Field(min_length=1, max_length=120)]
@@ -336,38 +334,14 @@ def create_admin_router(require_admin, db_path: Path | None = None):
         return {"items": rows}
 
     @router.get("/loans/export.xlsx")
-    def export_loans(rows=Depends(get_loans)):
-        return Response(content=workbook(rows), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=loans.xlsx; filename*=UTF-8''" + quote("工具借用记录.xlsx"), "Cache-Control": "no-store"})
+    def export_loans(request: Request, rows=Depends(get_loans)):
+        # get_loans validates and applies these same query parameters first.
+        filters = dict(request.query_params)
+        cabinet_label = "全部柜子"
+        if filters.get("cabinet_id"):
+            with database.transaction() as connection:
+                cabinet = connection.execute("SELECT code,name FROM cabinets WHERE id=?", (int(filters["cabinet_id"]),)).fetchone()
+            cabinet_label = f'{cabinet["name"]}（编号 {cabinet["code"]}）' if cabinet else f'柜子 ID {filters["cabinet_id"]}'
+        return Response(content=workbook(rows, filters=filters, cabinet_label=cabinet_label), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=loans.xlsx; filename*=UTF-8''" + quote("工具借用记录.xlsx"), "Cache-Control": "no-store"})
 
     return router
-
-
-def workbook(loans):
-    """Produce XLSX with literal strings, including names starting with =,+,-,@."""
-    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-    sheet = Element("worksheet", xmlns=namespace)
-    columns = SubElement(sheet, "cols")
-    for index, width in enumerate([22, 24, 28, 24, 10, 25, 25, 14, 12], 1):
-        SubElement(columns, "col", min=str(index), max=str(index), width=str(width), customWidth="1")
-    data = SubElement(sheet, "sheetData")
-    rows = [["人员", "学校人员编号", "柜子", "物品", "数量", "借用时间 (UTC)", "归还时间 (UTC)", "借用天数", "状态"]]
-    rows.extend([[r["user_name"], r["school_code"], f'{r["cabinet_code"]} · {r["cabinet_name"]}', r["tool_name"], r["quantity"], r["borrowed_at"], r["returned_at"] or "", r["days"], "已归还" if r["returned_at"] else "借用中"] for r in loans])
-    for number, values in enumerate(rows, 1):
-        row = SubElement(data, "row", r=str(number))
-        for index, value in enumerate(values):
-            cell = SubElement(row, "c", r=f"{chr(65 + index)}{number}", t="n" if isinstance(value, int) else "inlineStr")
-            if isinstance(value, int):
-                SubElement(cell, "v").text = str(value)
-            else:
-                text = SubElement(SubElement(cell, "is"), "t", {"{http://www.w3.org/XML/1998/namespace}space": "preserve"})
-                # XML 1.0 disallows control characters, including user-entered ones.
-                text.text = "".join(c for c in str(value) if c in "\t\n\r" or 0x20 <= ord(c) <= 0xD7FF or 0xE000 <= ord(c) <= 0xFFFD or 0x10000 <= ord(c) <= 0x10FFFF)
-    SubElement(sheet, "autoFilter", ref=f"A1:I{len(rows)}")
-    output = BytesIO()
-    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
-        archive.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
-        archive.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
-        archive.writestr("xl/workbook.xml", f'<workbook xmlns="{namespace}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="借用记录" sheetId="1" r:id="rId1"/></sheets></workbook>')
-        archive.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
-        archive.writestr("xl/worksheets/sheet1.xml", tostring(sheet, encoding="utf-8", xml_declaration=True))
-    return output.getvalue()

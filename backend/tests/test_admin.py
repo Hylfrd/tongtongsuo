@@ -176,10 +176,14 @@ def test_loans_filter_sort_export_literal_formula(environment):
         namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
         assert sheet.findall(".//s:f", namespace) == []
         rows = sheet.findall("s:sheetData/s:row", namespace)
-        assert len(rows) == 3
-        assert rows[1][0].attrib["t"] == "inlineStr"
-        assert rows[1][0].find("s:is/s:t", namespace).text.startswith("=HYPERLINK")
-        assert rows[1][1].find("s:is/s:t", namespace).text == "00123"
+        assert len(rows) == 8
+        assert rows[6][0].attrib["t"] == "inlineStr"
+        assert rows[6][0].find("s:is/s:t", namespace).text.startswith("=HYPERLINK")
+        assert rows[6][1].find("s:is/s:t", namespace).text == "00123"
+        assert rows[6][5].attrib["t"] == "n"
+        assert "归还情况：借用中" in archive.read("xl/worksheets/sheet1.xml").decode()
+        assert "排序：借用天数 · 降序" in archive.read("xl/worksheets/sheet1.xml").decode()
+        assert sheet.find("s:autoFilter", namespace).attrib["ref"] == "A6:I8"
 
 
 def test_icon_validation_and_quantity(environment):

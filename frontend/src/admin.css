@@ -233,3 +233,18 @@
 @media(prefers-reduced-motion:reduce) {
   .adm-filter select::picker(select),.adm-field select::picker(select),.adm-filter select::picker-icon,.adm-field select::picker-icon { transition:none; }
 }
+
+.adm-account-actions { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.adm-password-dialog { width:min(440px,calc(100% - 32px)); }
+.adm-password-fields { display:grid; gap:16px; }
+@media (min-width:721px) and (max-width:1050px) {
+  .adm-sidebar { gap:12px; padding-inline:20px; }
+  .adm-nav button { gap:5px; padding-inline:8px; font-size:12px; }
+  .adm-account-actions .adm-logout { padding-inline:6px; gap:5px; font-size:12px!important; }
+}
+@media (max-width:720px) {
+  .adm-account-actions { grid-column:2; grid-row:1; gap:2px; }
+  .adm-account-actions .adm-logout { min-height:44px; padding:8px 5px; font-size:11px!important; gap:4px; }
+  .adm-account-actions #admin-password svg { display:none; }
+  .adm-account-actions svg { width:15px; height:15px; }
+}

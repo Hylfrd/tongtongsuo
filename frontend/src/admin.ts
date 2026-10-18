@@ -97,8 +97,9 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       }
       return;
     }
-    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand" href="/"><img src="${mascot}" alt="正雅苑小狼"><span>正雅苑<small>共享工具箱</small></span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock']] as [View,string,IconName][]).map(([key,label,symbol])=>`<button data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span>${view===key?'<i></i>':''}</button>`).join('')}</nav><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-icon-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
+    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand" href="/"><img src="${mascot}" alt="正雅苑小狼"><span>正雅苑<small>共享工具箱</small></span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock']] as [View,string,IconName][]).map(([key,label,symbol])=>`<button data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span>${view===key?'<i></i>':''}</button>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-password">${icon('key')}<span>修改密码</span></button><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-icon-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
     root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.view as View)));
+    root.querySelector('#admin-password')?.addEventListener('click',changePassword);
     root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().catch(fail));
     root.querySelector('#admin-refresh')?.addEventListener('click',()=>void refresh());
     bindContent();
@@ -171,6 +172,82 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   async function exportLoans(button:HTMLButtonElement): Promise<void> {
     button.disabled=true;
     try{const response=await fetch(`/api/admin/loans/export.xlsx?${loanQuery()}`,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(30000)});if(!response.ok){if(response.status===401||response.status===403)forbidden=true;throw new Error('导出未完成，请确认登录状态后重试。');}const file=await response.blob();const url=URL.createObjectURL(file);const link=document.createElement('a');link.href=url;const disposition=response.headers.get('Content-Disposition')??'';let filename='';try{const encoded=disposition.match(/filename\*=UTF-8''([^;]+)/i);const plain=disposition.match(/filename="([^"]+)"/i);filename=encoded?decodeURIComponent(encoded[1]):plain?.[1]??'';}catch{/* Use a safe local filename. */}link.download=/^[^\/\\\x00-\x1f]{1,160}\.xlsx$/i.test(filename)?filename:`zhengya-loans-${new Date().toISOString().slice(0,10)}.xlsx`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);notice('Excel 已导出。');}catch(error){fail(error);}finally{button.disabled=false;}
+  }
+  function changePassword(): void {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'adm-dialog adm-password-dialog';
+    dialog.setAttribute('aria-labelledby','admin-password-title');
+    dialog.innerHTML = `<form class="adm-edit-form"><div class="adm-dialog-head"><h2 id="admin-password-title">修改密码</h2><button type="button" class="adm-dialog-close" aria-label="关闭">×</button></div><div class="adm-password-fields"><label class="adm-field">当前密码<input name="current_password" type="password" autocomplete="current-password" minlength="5" maxlength="256" required></label><label class="adm-field">新密码<input name="new_password" type="password" autocomplete="new-password" minlength="5" maxlength="256" required></label><label class="adm-field">确认新密码<input name="confirm_password" type="password" autocomplete="new-password" minlength="5" maxlength="256" required></label></div><div class="adm-form-actions"><button type="button" class="adm-outline" data-cancel>取消</button><button type="submit" class="adm-button">保存密码</button></div></form>`;
+    const form = dialog.querySelector<HTMLFormElement>('form')!;
+    const submit = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let busy = false, closed = false, cooldownUntil = 0;
+    const updateSubmit = () => {
+      const seconds = Math.max(0,Math.ceil((cooldownUntil - Date.now()) / 1000));
+      submit.disabled = busy || seconds > 0;
+      submit.textContent = busy ? '正在保存…' : seconds ? `${seconds} 秒后重试` : '保存密码';
+      if (!seconds && timer) { clearInterval(timer); timer = undefined; }
+    };
+    dialog.addEventListener('close',()=>{
+      closed = true;
+      if (timer) clearInterval(timer);
+      form.reset();
+      dialog.remove();
+      if (previousFocus?.isConnected) previousFocus.focus({preventScroll:true});
+    });
+    dialog.querySelector('.adm-dialog-close')?.addEventListener('click',()=>dialog.close());
+    dialog.querySelector('[data-cancel]')?.addEventListener('click',()=>dialog.close());
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if (busy || cooldownUntil > Date.now()) return;
+      const current = form.elements.namedItem('current_password') as HTMLInputElement;
+      const password = form.elements.namedItem('new_password') as HTMLInputElement;
+      const confirm = form.elements.namedItem('confirm_password') as HTMLInputElement;
+      if (password.value !== confirm.value) {
+        showToast('两次输入的新密码不一致。','error');
+        confirm.focus();
+        return;
+      }
+      busy = true;
+      updateSubmit();
+      try {
+        const response = await fetch('/api/auth/admin/password',{
+          method:'POST', credentials:'same-origin', cache:'no-store', signal:AbortSignal.timeout(15000),
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({current_password:current.value,new_password:password.value,confirm_password:confirm.value}),
+        });
+        if (!response.ok) {
+          const retryAfter = response.headers.get('Retry-After');
+          if (retryAfter) {
+            const numeric = Number(retryAfter);
+            const delay = Number.isFinite(numeric) ? numeric * 1000 : Date.parse(retryAfter) - Date.now();
+            if (delay > 0) {
+              cooldownUntil = Date.now() + delay;
+              if (!closed && !timer) timer = setInterval(updateSubmit,250);
+            }
+          }
+          let message = response.status === 429 ? '尝试过于频繁，请稍后重试。' : response.status === 401 ? '登录已过期，请重新登录。' : '密码修改失败，请重试。';
+          try {
+            const result = await response.json();
+            if (typeof result.detail === 'string') message = result.detail;
+            else if (typeof result.detail?.message === 'string') message = result.detail.message;
+            else if (Array.isArray(result.detail)) message = '密码需要 5–256 个字符。';
+          } catch { /* Keep the fallback without logging password data. */ }
+          throw new Error(message);
+        }
+        form.reset();
+        if (!closed) dialog.close();
+        location.assign('/admin?passwordChanged=1');
+      } catch(error) {
+        showToast(errorMessage(error),'error');
+      } finally {
+        busy = false;
+        if (!closed) updateSubmit();
+      }
+    });
+    root.append(dialog);
+    dialog.showModal();
   }
   function edit(kind:Resource,id?:number):void {
     if(kind==='tools'&&!cabinets.length){notice('请先在“柜子与设备”中添加一个柜子。',true);return;}

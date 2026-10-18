@@ -38,11 +38,14 @@ export function showToast(message: string, kind: Kind = 'error'): void {
   dismiss.className = 'toast-dismiss';
   dismiss.setAttribute('aria-label', document.documentElement.lang === 'en' ? 'Dismiss notification' : '关闭通知');
   dismiss.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m7 7 10 10M17 7 7 17"/></svg>';
-  toast.append(symbol, text, dismiss);
+  const progress = document.createElement('span');
+  progress.className = 'toast-progress';
+  progress.setAttribute('aria-hidden', 'true');
+  toast.append(symbol, text, dismiss, progress);
   stack.append(toast);
   if (stack.hasAttribute('popover') && !stack.matches(':popover-open')) stack.showPopover();
 
-  let remaining = kind === 'error' ? 9000 : 5000;
+  let remaining = 3000;
   let started = performance.now();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let closing = false;
@@ -50,6 +53,7 @@ export function showToast(message: string, kind: Kind = 'error'): void {
     if (closing) return;
     closing = true;
     clearTimeout(timer);
+    progress.style.animationPlayState = 'paused';
     const index = active.findIndex(item => item.close === close);
     if (index >= 0) active.splice(index, 1);
     const hadFocus = toast.contains(document.activeElement);
@@ -67,11 +71,13 @@ export function showToast(message: string, kind: Kind = 'error'): void {
     if (!timer) return;
     clearTimeout(timer);
     timer = undefined;
+    progress.style.animationPlayState = 'paused';
     remaining = Math.max(0, remaining - (performance.now() - started));
   };
   const resume = (): void => {
     if (closing || timer || toast.matches(':hover') || toast.contains(document.activeElement)) return;
     started = performance.now();
+    progress.style.animationPlayState = 'running';
     timer = setTimeout(close, remaining);
   };
   dismiss.addEventListener('click', close);

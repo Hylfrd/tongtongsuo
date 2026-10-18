@@ -3,59 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#edf7fb" />
+    <meta name="description" content="正雅苑共享工具箱：工具借用、归还与管理。" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>校园柜锁</title>
+    <link rel="icon" type="image/png" href="/src/assets/zheng-logo.png" />
+    <title>正雅苑 · 共享工具箱</title>
   </head>
   <body>
-    <main>
-      <header><span class="label">校园柜锁</span><span class="label">建设中</span></header>
-      <h1>验证学校身份</h1>
-      <p class="intro">使用学校账号验证身份。当前仅提供身份验证，开锁功能尚未开放。</p>
-      <section aria-labelledby="auth-heading">
-        <h2 id="auth-heading">学校账号登录</h2>
-        <form id="login-form" method="post" action="/api/auth/login" aria-describedby="login-disclosure">
-          <fieldset id="login-fields" disabled>
-            <div class="field">
-              <label for="username">学校账号</label>
-              <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" required />
-            </div>
-            <div class="field">
-              <label for="password">学校密码</label>
-              <input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required />
-            </div>
-            <p id="login-disclosure" class="note">柜锁项目会临时使用账号密码向学校验证身份，仅保留本项目会话所需的姓名与人员编号，不保存密码。此页面由柜锁项目提供。</p>
-            <button id="login" type="submit">验证并登录</button>
-          </fieldset>
-        </form>
-        <div id="identity" hidden>
-          <dl>
-            <div><dt>姓名</dt><dd id="student-name"></dd></div>
-            <div><dt>学校人员编号</dt><dd id="school-code"></dd></div>
-          </dl>
-          <p class="note">以上信息由学校返回；身份验证成功不代表拥有开锁权限。</p>
-          <button id="logout" type="button">退出柜锁项目</button>
-        </div>
-        <p id="auth-status" role="status" aria-live="polite" tabindex="-1">正在检查登录状态…</p>
-        <p id="auth-error" role="alert" tabindex="-1" hidden></p>
-        <noscript><p>请启用浏览器 JavaScript 后再使用登录功能。</p></noscript>
-      </section>
-      <section aria-labelledby="entry-heading">
-        <h2 id="entry-heading">当前入口</h2>
-        <p id="entry">请通过柜锁上的二维码进入。</p>
-        <p class="note">二维码只用于定位柜锁，不代表开锁权限。</p>
-      </section>
-      <section aria-labelledby="status-heading">
-        <h2 id="status-heading">服务状态</h2>
-        <dl>
-          <div><dt>后台连接</dt><dd id="connection">检查中…</dd></div>
-          <div><dt>学校身份验证</dt><dd id="authentication">检查中…</dd></div>
-          <div><dt>远程开锁</dt><dd>尚未开放</dd></div>
-        </dl>
-        <p id="status-message" role="status" aria-live="polite">正在检查后台服务。</p>
-        <button id="retry" type="button" disabled>重新检查</button>
-      </section>
-      <footer>校园柜锁项目 · 当前仅验证身份，暂不提供开锁服务</footer>
-    </main>
+    <div id="app"></div>
+    <noscript><p>正雅苑共享工具箱需要启用 JavaScript 才能验证学校身份和选择工具。</p></noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

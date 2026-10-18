@@ -42,7 +42,7 @@ export function createAISettings(request: Request) {
       <div class="adm-form-grid">
         <label class="adm-field">模型提供商<select name="provider"><option value="sub2api" ${s.provider==='sub2api'?'selected':''}>Sub2API</option><option value="custom" ${s.provider==='custom'?'selected':''}>自定义兼容接口</option></select></label>
         <label class="adm-field">API 地址<input name="base_url" type="url" value="${escape(s.base_url)}" required maxlength="500" autocomplete="off" spellcheck="false"></label>
-        <label class="adm-field adm-wide">API Key<input name="api_key" type="password" autocomplete="new-password" maxlength="4096" spellcheck="false"></label>
+        <label class="adm-field adm-wide">API Key<input name="api_key" type="password" placeholder="${s.api_key_configured?'************':'暂未配置'}" autocomplete="new-password" maxlength="4096" spellcheck="false"></label>
         <label class="adm-field adm-wide">生图模型<input name="image_model" value="${escape(s.image_model)}" required maxlength="100" autocomplete="off" spellcheck="false"></label>
         ${select('image_quality','图片质量',['low','medium','high','xhigh','max','auto'],s.image_quality)}
         ${select('image_background','图片背景',['transparent','opaque','auto'],s.image_background)}
@@ -106,6 +106,7 @@ export function createAISettings(request: Request) {
           const saved=await request<Settings>('/api/admin/ai/settings',{method:'PUT',body:JSON.stringify(body)});
           if(disposed)return false;
           settings=saved;
+          (field('api_key') as HTMLInputElement).placeholder=saved.api_key_configured?'************':'暂未配置';
           if(key && field('api_key').value===keyDraft)field('api_key').value='';
           dirty=revision!==savedRevision;
           showToast('图标生成设置已保存。','success');

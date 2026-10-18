@@ -50,7 +50,8 @@
     "kind": "subset font",
     "source": "https://github.com/google/fonts/tree/main/ofl/zcoolkuaile",
     "family": "ZCOOL KuaiLe",
-    "license": "SIL Open Font License 1.1; see OFL.txt"
+    "license": "SIL Open Font License 1.1; see OFL.txt",
+    "note": "Subset includes shared Chinese and Latin UI title glyphs plus 扫; UI fields and personal names retain the common text font."
   },
   "zheng-watermark.png": {
     "kind": "provided residence artwork",

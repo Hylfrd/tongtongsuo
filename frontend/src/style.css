@@ -1,3 +1,4 @@
+@font-face { font-family:'Zhengya Display'; src:url('./assets/display.woff') format('woff'); font-weight:400; font-style:normal; font-display:swap; }
 :root {
   font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;
   color:#203c49; background:#f1f7f8; font-synthesis:none; line-height:1.5;
@@ -49,24 +50,22 @@ input::placeholder { color:#657b83; }
 .back-button .icon { width:20px; height:20px; }
 .login-layout { width:100%; display:grid; grid-template-columns:1.08fr .92fr; align-items:center; gap:clamp(36px,5vw,76px); padding:8px 0 16px; }
 .login-illustration { overflow:hidden; height:clamp(390px,70dvh,580px); min-width:0; display:flex; flex-direction:column; position:relative; border-radius:22px; background:#dff0f6; padding:32px 30px 16px; }
-.illustration-title { position:relative; z-index:2; display:grid; gap:6px; color:#173f52; line-height:1.25; }
-.illustration-title span { font-size:clamp(27px,3vw,40px); font-weight:750; }
-.illustration-title strong { font-size:clamp(32px,3.6vw,46px); font-weight:750; }
-:lang(en) .illustration-title span { font-size:clamp(22px,2.4vw,29px); }
-:lang(en) .illustration-title strong { font-size:clamp(30px,3.1vw,40px); }
-.illustration-stage { flex:1; min-height:235px; position:relative; margin:12px -18px 0; }
-.scene-wolf { mix-blend-mode:multiply; position:absolute; width:57%; height:98%; left:-4%; bottom:-4px; z-index:2; transition:transform 500ms var(--ease); }
+.illustration-title { position:relative; z-index:2; display:grid; grid-template-rows:48px 58px; gap:6px; height:112px; flex-shrink:0; color:#173f52; line-height:1.25; font-family:'Zhengya Display','PingFang SC',sans-serif; }
+.illustration-title span { font-size:clamp(22px,2.6vw,32px); font-weight:400; color:#0085b1; }
+.illustration-title strong { font-size:clamp(32px,3.2vw,44px); font-weight:400; }
+.illustration-stage { flex:1; min-height:235px; position:relative; margin:12px -10px 0; display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:end; }
+.scene-wolf { mix-blend-mode:multiply; position:relative; width:100%; height:100%; align-self:end; z-index:2; transition:transform 500ms var(--ease); }
 .wolf { mix-blend-mode:multiply; display:block; width:130px; height:130px; margin:0 auto 10px; }
-.wolf img { width:100%; height:100%; object-fit:contain; opacity:1; }
+.wolf img { width:100%; height:100%; object-fit:contain; object-position:center bottom; opacity:1; }
 .scene-wolf .wolf { width:100%; height:100%; margin:0; animation:wolf-breathe 5s ease-in-out infinite; }
-.scene-toolbox { position:absolute; width:65%; height:92%; right:-4%; bottom:-2px; object-fit:contain; transition:transform 500ms var(--ease); }
-.scene-screwdriver { position:absolute; width:19%; height:48%; right:12%; top:-8%; object-fit:contain; transform:rotate(12deg); animation:tool-float 6s ease-in-out infinite; }
+.scene-toolbox { position:relative; width:100%; height:100%; object-fit:contain; object-position:center bottom; transition:transform 500ms var(--ease); }
+.scene-screwdriver { position:absolute; width:17%; height:39%; right:16%; top:0; object-fit:contain; transform:rotate(12deg); animation:tool-float 6s ease-in-out infinite; }
 .scene-flower { position:absolute; width:32px; height:32px; left:3%; top:19%; }
 @keyframes wolf-breathe { 0%,100% { transform:translateY(0) rotate(0); } 50% { transform:translateY(-4px) rotate(-1deg); } }
 @keyframes tool-float { 0%,100% { transform:translateY(0) rotate(12deg); } 50% { transform:translateY(-5px) rotate(16deg); } }
 .login-panel { width:100%; max-width:420px; min-width:0; justify-self:center; padding:12px 0; }
 .panel-symbol { display:grid; place-items:center; width:44px; height:44px; border-radius:13px; background:#d9eff4; color:#007e98; margin-bottom:18px; }
-.login-panel h1 { font-size:30px; font-weight:700; margin-bottom:8px; }
+.login-panel h1 { font-family:'Zhengya Display','PingFang SC',sans-serif; font-size:30px; font-weight:400; margin-bottom:8px; }
 .login-hint { color:var(--muted); font-size:14px; margin-bottom:26px; }
 .input-wrap { display:flex; align-items:center; gap:11px; border:1px solid #c3d6dc; border-radius:10px; background:#fff; padding-left:14px; transition:border-color 160ms; }
 .input-wrap > svg { width:18px; height:18px; color:#658894; }
@@ -80,16 +79,16 @@ input::placeholder { color:#657b83; }
 .preview-entry { margin-top:12px; width:100%; }
 .preview-note { font-size:12px; text-align:center; padding-top:8px; color:#72521c; }
 .scan-panel { width:100%; max-width:420px; justify-self:center; padding:16px 0; }
-.scan-panel h1 { font-size:clamp(25px,3vw,31px); text-wrap:balance; }
-.scan-panel p { margin-top:14px; font-size:14px; color:var(--muted); }
-.scan-panel > .primary-button { margin-top:26px; min-height:48px; }
+.scan-panel h1 { font-family:'Zhengya Display','PingFang SC',sans-serif; font-size:clamp(25px,3vw,31px); line-height:1.3; font-weight:400; min-height:42px; text-wrap:balance; }
+.scan-panel p { min-height:42px; margin-top:12px; font-size:14px; color:var(--muted); }
+.scan-panel > .primary-button { min-width:210px; margin-top:26px; min-height:48px; }
 .home-layout { width:min(940px,100%); align-self:center; padding:16px 0; }
 .home-layout h1 { font-size:clamp(23px,3vw,31px); font-weight:600; margin-bottom:28px; overflow-wrap:anywhere; }
 .choice-layout { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
 .choice-card { text-align:left; display:grid; grid-template-rows:auto minmax(0,1fr); gap:14px; min-width:0; height:clamp(220px,38dvh,300px); border:0; border-radius:17px; position:relative; padding:24px; color:#164b5a; transition:background 180ms,transform 160ms; }
 .choice-borrow { background:#d9edf0; }
 .choice-return { background:#e7edf7; color:#3d5375; }
-.choice-label { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:23px; font-weight:700; }
+.choice-label { font-family:'Zhengya Display','PingFang SC',sans-serif; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:25px; font-weight:400; }
 .choice-art { display:flex; min-height:0; align-items:center; justify-content:flex-end; }
 .choice-art img { height:100%; width:75%; max-width:270px; object-fit:contain; transition:transform 300ms var(--ease); }
 .choice-return .choice-art { mix-blend-mode:multiply; }
@@ -163,13 +162,11 @@ input::placeholder { color:#657b83; }
   .page-content > .login-layout { margin-block:0; }
   .login-layout { grid-template-columns:1fr; gap:22px; padding:12px 0 20px; }
   .login-illustration { height:128px; padding:0; border-radius:0; background:transparent; flex-direction:row; align-items:center; overflow:visible; mix-blend-mode:multiply; }
-  .illustration-title { width:calc(100% - 116px); gap:7px; }
-  .illustration-title span { font-size:17px; font-weight:600; }
-  .illustration-title strong { font-size:26px; }
-  :lang(en) .illustration-title span { font-size:13px; line-height:1.5; font-weight:500; }
-  :lang(en) .illustration-title strong { font-size:25px; line-height:1.15; }
-  .illustration-stage { position:absolute; right:4px; bottom:0; width:124px; height:132px; min-height:0; margin:0; }
-  .scene-wolf { width:100%; height:100%; left:0; bottom:0; }
+  .illustration-title { width:calc(100% - 116px); height:80px; grid-template-rows:40px 34px; gap:6px; }
+  .illustration-title span { font-size:15px; font-weight:400; color:#006d91; }
+  .illustration-title strong { font-size:clamp(21px,6.8cqi,25px); }
+  .illustration-stage { position:absolute; right:4px; bottom:0; width:124px; height:132px; min-height:0; margin:0; display:block; }
+  .scene-wolf { width:100%; height:100%; }
   .scene-toolbox,.scene-screwdriver,.scene-flower { display:none; }
   .login-panel { max-width:420px; padding:0; }
   .panel-symbol { display:none; }
@@ -209,8 +206,7 @@ input::placeholder { color:#657b83; }
 }
 @media(max-height:680px) {
   .login-illustration { height:clamp(340px,68dvh,480px); padding-top:24px; }
-  .illustration-title span { font-size:30px; }
-  .illustration-title strong { font-size:35px; }
+  .illustration-title { grid-template-rows:40px 50px; height:96px; }
   .illustration-stage { min-height:200px; }
   .page-tools { margin-bottom:6px; }
   .login-hint { margin-bottom:18px; }
@@ -221,8 +217,7 @@ input::placeholder { color:#657b83; }
   .unlock-layout { padding-block:10px; }
   @container(max-width:720px) {
     .login-illustration { height:100px; padding:0; }
-    .illustration-title span { font-size:16px; }
-    .illustration-title strong { font-size:24px; }
+    .illustration-title { grid-template-rows:40px 34px; height:80px; }
     .illustration-stage { min-height:0; height:110px; width:110px; right:0; }
     .login-layout { gap:20px; padding-top:8px; }
     .login-panel h1 { font-size:22px; }

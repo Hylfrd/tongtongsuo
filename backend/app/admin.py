@@ -298,9 +298,13 @@ def create_admin_router(require_admin, db_path: Path | None = None):
         direction: Literal["asc", "desc"] = "desc",
         status: Literal["all", "active", "returned"] = "all",
         q: Annotated[str, Query(max_length=200)] = "",
+        school_code: Annotated[str, Query(max_length=128)] = "",
         cabinet_id: Annotated[int | None, Query(gt=0)] = None,
     ):
         conditions, args = [], []
+        if school_code:
+            conditions.append("school_code=?")
+            args.append(school_code)
         if status != "all":
             conditions.append("returned_at IS " + ("NOT NULL" if status == "returned" else "NULL"))
         if cabinet_id is not None:

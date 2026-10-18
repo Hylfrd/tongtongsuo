@@ -25,6 +25,7 @@ class AdminBodyLimitMiddleware:
             await response(scope, receive, send)
 
         headers = scope.get("headers", [])
+        max_bytes = 2 * 1024 * 1024 if path == "/api/admin/members/import" else self.max_bytes
         lengths = [value for name, value in headers if name.lower() == b"content-length"]
         declared = None
         if lengths:
@@ -37,7 +38,7 @@ class AdminBodyLimitMiddleware:
             except ValueError:
                 await reject(400, "INVALID_CONTENT_LENGTH", "请求长度格式不正确。")
                 return
-            if declared > self.max_bytes:
+            if declared > max_bytes:
                 await reject(413, "REQUEST_TOO_LARGE", "管理请求过大，请缩小图标或输入内容。")
                 return
 
@@ -53,7 +54,7 @@ class AdminBodyLimitMiddleware:
                     if message["type"] != "http.request":
                         continue
                     chunk = message.get("body", b"")
-                    if len(body) + len(chunk) > self.max_bytes:
+                    if len(body) + len(chunk) > max_bytes:
                         too_large = True
                         break
                     body.extend(chunk)

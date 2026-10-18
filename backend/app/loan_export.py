@@ -119,7 +119,7 @@ def workbook(loans, *, filters=None, cabinet_label="全部柜子", exported_at=N
     meta = [
         (1, 38, [("A", "正雅苑 · 共享工具箱 | 借还记录", 1)]),
         (2, 27, [("A", f"导出时间：{exported_at.astimezone(BEIJING):%Y-%m-%d %H:%M:%S}（北京时间）    ·    共 {len(loans)} 条记录", 2)]),
-        (3, 26, [("A", f'搜索：{filters.get("q", "").strip() or "不限"}', 2)]),
+        (3, 26, [("A", f'搜索：{filters.get("q", "").strip() or "不限"}' + (f'    |    学号：{filters["school_code"]}' if filters.get("school_code") else ''), 2)]),
         (4, 30, [("A", f"柜子：{cabinet_label}", 2), ("E", f"归还情况：{status}", 2)]),
         (5, 28, [("A", f"排序：{sort} · {direction}    |    下方日期均为北京时间（UTC+8）", 2)]),
     ]

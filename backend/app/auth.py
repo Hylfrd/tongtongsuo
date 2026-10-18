@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, Response
 from app.school_sso import SchoolAuthError, SchoolIdentity, authenticate
 from app.admin_password import create_password_hash, parse_password_hash, verify_password
 from app.admin_credentials import AdminCredentials
+from app.members import MembersStore, normalize_member
 
 COOKIE = "tts_session"
 SESSION_SECONDS = 1800
@@ -32,6 +33,7 @@ class AuthManager:
         db_path: Path | None = None,
     ) -> None:
         self._credentials = AdminCredentials(os.environ.get("ADMIN_PASSWORD_HASH", ""), db_path)
+        self.members = MembersStore(db_path) if db_path is not None else None
         self.router = self._create_router(verifier)
 
     async def require_user(self, request: Request, response: Response) -> dict:
@@ -132,6 +134,10 @@ class AuthManager:
                 return error(401, "NO_SESSION", "请先验证学校账号。")
             return user_response(session[1])
 
+        @router.get("/mode")
+        async def login_mode() -> Response:
+            return JSONResponse({"mode": self.members.mode() if self.members else "sso"}, headers={"Cache-Control": "no-store"})
+
         @router.post("/login")
         async def login(request: Request) -> Response:
             nonlocal active
@@ -158,12 +164,22 @@ class AuthManager:
                 body.clear()
             if not isinstance(payload, dict):
                 return error(422, "INVALID_REQUEST", "请输入学校账号和密码。")
-            username, password = payload.get("username"), payload.get("password")
-            if not isinstance(username, str) or not isinstance(password, str):
-                return error(422, "INVALID_REQUEST", "请输入学校账号和密码。")
-            username = username.strip()
-            if not 1 <= len(username) <= 128 or not 1 <= len(password) <= 256:
-                return error(422, "INVALID_REQUEST", "账号或密码长度不正确。")
+            roster = None
+            if "username" not in payload and "password" not in payload:
+                if not all(isinstance(payload.get(key), str) for key in ("name", "school_code", "room_number")):
+                    return error(422, "INVALID_REQUEST", "请填写姓名、学号和宿舍号。")
+                try:
+                    roster = normalize_member(payload["name"], payload["school_code"], payload["room_number"])
+                except ValueError:
+                    return error(422, "INVALID_REQUEST", "请正确填写姓名、学号和宿舍号。")
+                username, password = roster["school_code"], ""
+            else:
+                username, password = payload.get("username"), payload.get("password")
+                if not isinstance(username, str) or not isinstance(password, str):
+                    return error(422, "INVALID_REQUEST", "请输入学校账号和密码。")
+                username = username.strip()
+                if not 1 <= len(username) <= 128 or not 1 <= len(password) <= 256:
+                    return error(422, "INVALID_REQUEST", "账号或密码长度不正确。")
             del payload
 
             now = time.monotonic()
@@ -180,7 +196,7 @@ class AuthManager:
             next_allowed = failures.get(account_key, (0, now, 0))[2]
             if next_allowed > now:
                 remaining = math.ceil(next_allowed - now)
-                response = error(429, "LOGIN_COOLDOWN", f"账号或密码连续输入错误，请等待 {remaining} 秒后再试。")
+                response = error(429, "LOGIN_COOLDOWN", f"登录信息连续输入错误，请等待 {remaining} 秒后再试。")
                 response.headers["Retry-After"] = str(remaining)
                 return response
             if account_key in in_flight:
@@ -194,7 +210,13 @@ class AuthManager:
             in_flight.add(account_key)
             active += 1
             try:
-                if username.casefold() == admin_username.casefold():
+                if roster is not None:
+                    if self.members is None or self.members.mode() != "roster":
+                        return error(409, "LOGIN_MODE_CHANGED", "登录方式已变更，请刷新页面后重新登录。")
+                    identity = self.members.verify_roster(roster)
+                    if identity is None:
+                        return credentials_failed(account_key, "姓名、学号或宿舍号不正确。")
+                elif username.casefold() == admin_username.casefold():
                     encoded, admin_revision = self._credentials.snapshot()
                     admin_password = parse_password_hash(encoded)
                     if admin_password is None:
@@ -205,8 +227,14 @@ class AuthManager:
                         return error(401, "ADMIN_PASSWORD_CHANGED", "管理员密码已变更，请使用新密码重新登录。")
                     identity = {"name": "管理员", "school_code": None, "role": "admin"}
                 else:
+                    if self.members is not None and self.members.mode() != "sso":
+                        return error(409, "LOGIN_MODE_CHANGED", "登录方式已变更，请刷新页面后重新登录。")
                     school_identity = await verifier(username, password)
+                    if self.members is not None and self.members.mode() != "sso":
+                        return error(409, "LOGIN_MODE_CHANGED", "登录方式已变更，请刷新页面后重新登录。")
                     identity = {"name": school_identity.name, "school_code": school_identity.school_code}
+                    if self.members is not None:
+                        self.members.record_sso(identity)
             except SchoolAuthError as exc:
                 if exc.status_code == 401 and exc.code in ("INVALID_CREDENTIALS", "SCHOOL_CREDENTIALS_REJECTED"):
                     return credentials_failed(account_key, exc.message, exc.code)

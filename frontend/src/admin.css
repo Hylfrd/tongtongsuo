@@ -1,4 +1,4 @@
-.admin-shell { --adm-ink:#203e4c; --adm-muted:#526b78; --adm-line:#d8e5e9; --adm-cyan:#087c9c; display:flex; flex-direction:column; min-height:100dvh; color:var(--adm-ink); background:#f5f9fa; font-size:14px; line-height:1.5; }
+.admin-shell { --adm-ink:#203e4c; --adm-muted:#526b78; --adm-line:#d8e5e9; --adm-cyan:#087c9c; display:flex; flex-direction:column; min-height:100dvh; color:var(--adm-ink); background:linear-gradient(146deg,#eaf5f5 0 23%,transparent 23% 100%),linear-gradient(326deg,#ecf1f6 0 19%,transparent 19% 100%),#fafaf6; font-size:14px; line-height:1.5; }
 .admin-shell *, .adm-dialog * { box-sizing:border-box; }
 .admin-shell h1,.admin-shell h2,.admin-shell h3,.admin-shell p,.adm-dialog h2,.adm-dialog p { margin:0; }
 .admin-shell button,.adm-dialog button,.adm-dialog input,.adm-dialog select,.adm-dialog textarea { font:inherit; }
@@ -47,10 +47,11 @@
 .adm-section-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; margin:20px 0 12px; }
 .adm-section-heading h2 { font-size:17px; font-weight:700; }
 .adm-section-heading h2 > span { margin-left:8px; font-size:12px; font-weight:450; color:var(--adm-muted); }
-.adm-cabinet-group { margin-top:18px; }
+.adm-cabinet-groups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; align-items:start; }
+.adm-cabinet-group { min-width:0; }
 .adm-cabinet-group > h3 { display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:14px; }
 .adm-cabinet-group > h3 span { font-size:12px; color:var(--adm-muted); font-weight:450; }
-.adm-cabinets { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.adm-cabinets { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
 .adm-cabinet { min-width:0; padding:16px 18px 8px; border:1px solid var(--adm-line); border-radius:12px; background:#fff; }
 .adm-cabinet-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:12px; }
 .adm-cabinet-top > svg { color:#5d8798; }
@@ -180,7 +181,7 @@
   .adm-stats strong { font-size:23px; }
   .adm-stats strong small { font-size:13px; }
   .adm-stats span { font-size:10px; }
-  .adm-cabinets,.adm-tools { grid-template-columns:1fr; }
+  .adm-cabinet-groups,.adm-cabinets,.adm-tools { grid-template-columns:1fr; }
   .adm-cabinet { padding:14px 16px 6px; }
   .adm-scan-links a,.adm-scan-links .adm-text,.adm-row-actions .adm-text { min-height:44px; }
   .adm-toolbar { gap:12px; }

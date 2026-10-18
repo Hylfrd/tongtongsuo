@@ -1,0 +1,46 @@
+{
+  "asset": "mascot-restored.png",
+  "kind": "AI restoration of provided residence artwork",
+  "sources": [
+    {
+      "source": "正雅苑/新生论坛/正雅苑大一苑舍日论坛_fix.pptx",
+      "embedded_path": "ppt/media/image1.png",
+      "size": [
+        2560,
+        2560
+      ],
+      "role": "Original transparent mascot; viewer-right ear tip is clipped in source"
+    },
+    {
+      "source": "正雅苑/26茶话会/迎新茶话会final.pptx",
+      "embedded_path": "ppt/media/image2.jpeg",
+      "size": [
+        2560,
+        2560
+      ],
+      "role": "Official white-background reference with complete ear tip"
+    }
+  ],
+  "rights": "Residence artwork supplied by project maintainer; original rights retained.",
+  "operation": "edit",
+  "model": "gpt-image-2.5-sunburst",
+  "route": "relay",
+  "requested_size": [
+    2048,
+    2048
+  ],
+  "generated_size": [
+    1254,
+    1254
+  ],
+  "delivered_size": [
+    1254,
+    1254
+  ],
+  "size_ok": false,
+  "processing": "Original generated RGBA image retained, including transparent margins. No crop or resize.",
+  "sha256": "fd595c0f2db7bedd11967be0dedf4eef2f719f88c321393d19712bee5fd4eb7b",
+  "prompt": "Repair a single damaged region in the FIRST input transparent PNG. It is the official turquoise residence wolf mascot. Its taller ear on the viewer's RIGHT has a flat horizontally clipped tip. The SECOND input white-background JPEG shows the same official mascot with its correct complete rounded-pointed ear tip. Restore ONLY the missing upper tip of that ear in the first input, using the exact shape and colors visible in the second reference. This is a restoration, NOT a redesign. Preserve the original first PNG's exact face, open eyes, smile, tongue, full body, tail, paws, proportions, shading, turquoise colors and existing 2005 emblem. Preserve the original seated pose and all other pixels as faithfully as possible. Keep the complete character centered with transparent breathing room on all sides, including above both fully intact ears. True transparent RGBA background, NO white background, NO cast shadow, no panel, no text, no extra props, no tools, no closed eyes. One single complete restored character, not a comparison or collage.",
+  "local_metadata": "generated/zhengya-mascot-ear-restored-20261018-155714-2048x2048.meta.json",
+  "review": "Both ears, paws and tail visually inspected and complete. Model slightly redrew contour/shading; use as one stable image, never alternate with original as an animation frame."
+}

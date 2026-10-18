@@ -13,8 +13,9 @@
 .adm-sidebar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:28px; min-height:68px; padding:0 max(24px,calc((100vw - 1160px)/2)); background:#fff; border-bottom:1px solid var(--adm-line); }
 .adm-brand { display:flex; align-items:center; gap:10px; flex-shrink:0; text-decoration:none; }
 .adm-brand img { width:44px; height:48px; object-fit:contain; }
-.adm-brand > span { font-size:17px; line-height:1.25; font-weight:750; }
-.adm-brand small { display:block; margin-top:3px; color:var(--adm-muted); font-size:11px; font-weight:450; }
+.admin-shell .adm-brand { color:#007d94; }
+.adm-brand > span { font-family:'Zhengya Display','PingFang SC',sans-serif; font-size:22px; line-height:1.2; font-weight:400; }
+.adm-brand small { display:block; margin-top:3px; color:inherit; font-size:14px; font-weight:400; }
 .adm-nav { display:flex; align-self:stretch; gap:4px; margin-left:auto; }
 .adm-nav button { position:relative; display:flex; align-items:center; justify-content:center; gap:7px; min-height:44px; padding:0 16px; border:0; background:transparent; color:var(--adm-muted); font-size:13px; transition:background 160ms,color 160ms; }
 .adm-nav button:hover { background:#edf6f8; color:var(--adm-cyan); }
@@ -27,7 +28,7 @@
 .adm-main { flex:1; min-width:0; padding:24px 0 32px; }
 .adm-page-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:20px; }
 .adm-page-heading h1 { font-size:25px; font-weight:750; line-height:1.3; }
-.adm-icon-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:8px 12px; border:1px solid var(--adm-line); border-radius:8px; background:white; color:var(--adm-ink); font-size:13px!important; }
+.adm-icon-button { display:inline-grid; place-items:center; width:40px; height:40px; padding:0; border:0; border-radius:50%; background:transparent; color:#397084; transition:background-color 160ms,color 160ms; }
 .adm-button,.adm-outline { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding:8px 14px; border-radius:8px; font-size:13px!important; font-weight:650!important; line-height:1.5; text-decoration:none; transition:background 180ms,color 180ms,transform 180ms; }
 .adm-button { background:var(--adm-cyan,#087c9c); border:1px solid transparent; color:white; }
 .adm-button:hover:not(:disabled) { background:#086680; }
@@ -134,7 +135,9 @@
 .adm-edit-form { padding:24px; }
 .adm-dialog-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
 .adm-dialog-head h2 { font-size:22px; line-height:1.4; }
-.adm-dialog-close { width:36px; height:36px; flex-shrink:0; border:0; border-radius:7px; background:#eef4f6; color:#345c6d; font-size:24px!important; }
+.adm-dialog-close { display:grid; place-items:center; width:40px; height:40px; padding:0; flex-shrink:0; border:0; border-radius:8px; background:#eef4f6; color:#345c6d; transition:background-color 160ms; }
+.adm-dialog-close svg { display:block; width:19px; height:19px; }
+.adm-dialog-close:hover { background:#e0edf1; }
 .adm-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .adm-field { min-width:0; font-size:12px; font-weight:600; }
 .adm-field > input,.adm-field > select,.adm-field > textarea { display:block; margin-top:6px; font-weight:400; }
@@ -165,8 +168,8 @@
   .adm-sidebar { position:relative; display:grid; grid-template-columns:1fr auto; gap:0; padding:10px 18px 0; }
   .adm-brand { grid-column:1; grid-row:1; }
   .adm-brand img { width:37px; height:41px; }
-  .adm-brand > span { font-size:16px; }
-  .adm-brand small { font-size:10px; }
+  .adm-brand > span { font-size:20px; }
+  .adm-brand small { font-size:13px; }
   .adm-logout { grid-column:2; grid-row:1; padding-right:0; }
   .adm-nav { grid-column:1/-1; width:100%; margin:8px 0 0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; }
   .adm-nav button { gap:5px; padding:10px 0; min-height:44px; font-size:12px; }
@@ -176,7 +179,8 @@
   .adm-main { padding:20px 0 24px; }
   .adm-page-heading { margin-bottom:16px; }
   .adm-page-heading h1 { font-size:23px; }
-  .adm-icon-button,.adm-button,.adm-outline { min-height:44px; }
+  .adm-icon-button { width:44px; height:44px; }
+  .adm-button,.adm-outline { min-height:44px; }
   .adm-stats { padding-bottom:16px; margin-bottom:16px; }
   .adm-stats > div { padding:0 10px; }
   .adm-stats strong { font-size:23px; }

@@ -1,5 +1,6 @@
 import './admin.css';
 import { showToast } from './toast';
+import { licenseHref } from './license-navigation';
 import { validateForm, clearFieldError, markFieldError } from './validation';
 import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
@@ -19,7 +20,8 @@ const imageData = (value: unknown): value is string => typeof value === 'string'
 const toolIcons: Record<string, {label: string; icon: IconName}> = {screwdriver: {label:'螺丝刀', icon:'key'}, tape:{label:'卷尺',icon:'tape'}, hammer:{label:'锤子',icon:'hammer'}, pliers:{label:'钳子',icon:'pliers'}, toolbox:{label:'工具箱',icon:'toolbox'}};
 
 export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogout: () => Promise<void>): Promise<void> {
-  let view: View = 'overview';
+  const section = new URLSearchParams(location.search).get('section');
+  let view: View = section === 'devices' || section === 'tools' || section === 'loans' ? section : 'overview';
   let cabinets: Cabinet[] = [], locks: Lock[] = [], gateways: Gateway[] = [], tools: Tool[] = [], loans: Loan[] = [];
   let overview: Overview | null = null;
   let toolCabinet = '', deviceTab: 'cabinets' | 'locks' | 'gateways' = 'cabinets';
@@ -85,6 +87,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     const currentContent = root.querySelector<HTMLElement>('#admin-content');
     if (currentContent) {
       root.querySelector('#admin-page-title')!.textContent = titles[view];
+      root.querySelector('.adm-license')?.setAttribute('href', licenseHref(`/admin?section=${view}`));
       root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>{
         if (button.dataset.view === view) button.setAttribute('aria-current','page');
         else button.removeAttribute('aria-current');
@@ -99,7 +102,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       }
       return;
     }
-    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand" href="/"><img src="${mascot}" alt="正雅苑小狼"><span>正雅苑<small>共享工具箱</small></span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock']] as [View,string,IconName][]).map(([key,label,symbol])=>`<button data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span>${view===key?'<i></i>':''}</button>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-password">${icon('key')}<span>修改密码</span></button><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-icon-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
+    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand" href="/"><img src="${mascot}" alt="正雅苑小狼"><span>正雅苑<small>共享工具箱</small></span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock']] as [View,string,IconName][]).map(([key,label,symbol])=>`<button data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span>${view===key?'<i></i>':''}</button>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-password">${icon('key')}<span>修改密码</span></button><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-icon-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="adm-license" href="${escape(licenseHref(`/admin?section=${view}`))}">License</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
     root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.view as View)));
     root.querySelector('#admin-password')?.addEventListener('click',changePassword);
     root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().catch(fail));

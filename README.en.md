@@ -20,6 +20,8 @@ Under **其他 → 通通锁**, enter the Client ID and Client Secret from the T
 
 Click **同步通通锁** under **柜子与设备** to import devices and gateway associations, then assign locks to cabinets. Each cabinet has its own QR entry and can contain multiple locks. Gateway names, IDs and associations reflect the last device sync; sync again after changing them in the App.
 
+**添加锁 / 添加网关** provides setup instructions, a browser Bluetooth availability check and account synchronization. Initial lock setup and G2 Wi-Fi provisioning require the TTLock App near the device; afterward, sync devices from the website. Browser Bluetooth support alone does not provide TTLock initialization. This website does not scan or connect to unknown Bluetooth services. See the [official G2 initialization flow](https://cnopen.ttlock.com/doc/sdk/v3/android/eg/gateway).
+
 Status results include their query time. A successful status request, an expired auto-lock timer or a locked bolt does not confirm that the cabinet door is closed.
 
 ### Lock settings
@@ -35,6 +37,14 @@ Auto-lock accepts 1–32767 seconds, or `-1` to disable it on supported locks; `
 **查询配置** reads the latest platform values, including changes made in the App. After editing, click **保存设备配置** to apply changes and read them back for confirmation. If a result is unknown, partially failed or unconfirmed, query and check the current values before submitting again.
 
 While the device page is visible, devices sync approximately every 30 minutes, statuses refresh every 5 minutes, and an expanded lock's settings refresh every 3 minutes. Automatic parameter refresh skips unsaved changes; manual queries retain parameter drafts. These tasks pause when you leave the device page or put the browser in the background.
+
+Student unlock requests use the cabinet assignments stored on the server. Multiple locks in one cabinet are operated sequentially; partial or unknown results are never retried automatically. Unlocking currently does not create borrowing or return records.
+
+### Gateway settings
+
+Click **编辑** on a gateway to expand its settings. Local code, name and notes are saved separately from the TTLock platform name. Renaming the platform entry updates the App and is read back for confirmation. Queries show gateway type, MAC, network name, online status and associated locks with signal strength (RSSI) and its update time. Signal update time is separate from the current query time.
+
+An expanded gateway refreshes approximately every 3 minutes when it has no unsaved changes. TTLock discovers gateway–lock associations, and queries update this application's cache. Wi-Fi provisioning and settings unavailable through the platform remain in the App.
 
 ### Icon generation
 

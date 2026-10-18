@@ -49,9 +49,11 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     notice(errorMessage(error),true);
     if (forbidden) { root.innerHTML = `<main class="admin-auth-error"><img src="${mascot}" alt="正雅苑"><h1>需要重新验证身份</h1><p>${escape(error instanceof Error ? error.message : '无法确认管理权限。')}</p><button class="adm-button" id="admin-reauth">返回登录</button></main>`; root.querySelector('#admin-reauth')?.addEventListener('click',()=>void onLogout().catch(fail)); return; }
   }
-  function cabinetName(id: number | null): string { const cabinet = cabinets.find(item=>item.id===id); return cabinet ? `${cabinet.code} · ${cabinet.name}` : '尚未分配柜子'; }
+  function compactCabinetCode(code: string, name: string): boolean { return name === code || name === `${code}区`; }
+  function itemName(item: {name:string;code?:string}): string { return item.code && !compactCabinetCode(item.code,item.name) ? `${item.code} · ${item.name}` : item.name; }
+  function cabinetName(id: number | null): string { const cabinet = cabinets.find(item=>item.id===id); return cabinet ? itemName(cabinet) : '尚未分配柜子'; }
   function gatewayName(id: number | null): string { return gateways.find(item=>item.id===id)?.name ?? '未绑定网关'; }
-  function options(items: {id:number;name:string;code?:string}[], selected: unknown, blank: string): string { return `<option value="">${blank}</option>` + items.map(item=>`<option value="${item.id}" ${String(selected)===String(item.id)?'selected':''}>${escape(item.code ? `${item.code} · ${item.name}` : item.name)}</option>`).join(''); }
+  function options(items: {id:number;name:string;code?:string}[], selected: unknown, blank: string): string { return `<option value="">${blank}</option>` + items.map(item=>`<option value="${item.id}" ${String(selected)===String(item.id)?'selected':''}>${escape(itemName(item))}</option>`).join(''); }
   function empty(title: string, copy: string, action?: string): string { return `<div class="adm-empty">${icon('toolbox')}<h3>${title}</h3>${copy ? `<p>${copy}</p>` : ''}${action ?? ''}</div>`; }
   function controls(kind: Resource, id: number): string { return `<div class="adm-row-actions"><button class="adm-text" data-edit="${kind}" data-id="${id}">编辑</button><button class="adm-text adm-danger" data-delete="${kind}" data-id="${id}">删除</button></div>`; }
   function toolArt(tool: Tool): string { return imageData(tool.icon_data) ? `<img src="${escape(tool.icon_data)}" alt="" loading="lazy">` : tool.icon === 'screwdriver' ? `<img src="${screwdriver}" alt="" loading="lazy">` : icon(toolIcons[tool.icon]?.icon ?? 'toolbox'); }
@@ -71,12 +73,30 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     target?.focus({preventScroll:true});
   }
   function navigate(next: View): void {
+    if (view === next) return;
     view = next;
-    shell('#admin-page-title');
+    shell('#admin-page-title', true);
     window.scrollTo({top:0,behavior:'instant'});
     if (view === 'loans') void loadLoans();
   }
-  function shell(focusSelector?: string): void {
+  function shell(focusSelector?: string, animate = false): void {
+    const currentContent = root.querySelector<HTMLElement>('#admin-content');
+    if (currentContent) {
+      root.querySelector('#admin-page-title')!.textContent = titles[view];
+      root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>{
+        if (button.dataset.view === view) button.setAttribute('aria-current','page');
+        else button.removeAttribute('aria-current');
+      });
+      currentContent.innerHTML = loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>';
+      if (loaded) currentContent.removeAttribute('aria-busy');
+      bindContent();
+      restoreFocus(focusSelector);
+      currentContent.getAnimations().forEach(animation=>animation.cancel());
+      if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        currentContent.animate([{opacity:.65,transform:'translateY(3px)'},{opacity:1,transform:'translateY(0)'}],{duration:200,easing:'cubic-bezier(.16,1,.3,1)'});
+      }
+      return;
+    }
     root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand" href="/"><img src="${mascot}" alt="正雅苑小狼"><span>正雅苑<small>共享工具箱</small></span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock']] as [View,string,IconName][]).map(([key,label,symbol])=>`<button data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span>${view===key?'<i></i>':''}</button>`).join('')}</nav><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-icon-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
     root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.view as View)));
     root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().catch(fail));
@@ -100,14 +120,14 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     if(!cabinets.length) return empty('暂无柜子','',`<button class="adm-outline" data-add="cabinets">添加柜子</button>`);
     const groups = new Map<string,Cabinet[]>();
     cabinets.forEach(cabinet=>{const group=cabinet.group_name || '未分组'; groups.set(group,[...(groups.get(group)??[]),cabinet]);});
-    return '<div class="adm-cabinet-groups">' + [...groups].map(([group,items])=>`<section class="adm-cabinet-group"><h3>${escape(group)}<span>${items.length} 个柜子</span></h3><div class="adm-cabinets">${items.map(cabinet=>`<article class="adm-cabinet"><div class="adm-cabinet-top"><span class="adm-cabinet-code">${escape(cabinet.code)}</span>${icon('toolbox')}</div><h2>${escape(cabinet.name)}</h2>${cabinet.location ? `<p>${escape(cabinet.location)}</p>` : ''}<div class="adm-cabinet-summary"><span>${cabinet.lock_count} 把锁</span><span>${cabinet.tool_count} 种工具</span></div>${locks.filter(lock=>lock.cabinet_id===cabinet.id).map(lock=>`<div class="adm-bound-lock">${icon('lock')}<span>${escape(lock.code)} · ${escape(lock.name)}</span><span>状态未知</span></div>`).join('')}${cabinet.notes?`<p class="adm-tool-note">${escape(cabinet.notes)}</p>`:''}<div class="adm-scan-links"><a href="/scan/${encodeURIComponent(cabinet.code)}" target="_blank" rel="noopener">柜子入口 ${icon('arrow')}</a><button class="adm-text" data-copy-scan="${escape(cabinet.code)}">复制链接</button><a href="/m/scan/${encodeURIComponent(cabinet.code)}" target="_blank" rel="noopener">手机预览</a></div>${controls('cabinets',cabinet.id)}</article>`).join('')}</div></section>`).join('') + '</div>';
+    return '<div class="adm-cabinet-groups">' + [...groups].map(([group,items])=>`<section class="adm-cabinet-group">${items.length > 1 || items[0].name !== group ? `<h3>${escape(group)}<span>${items.length} 个柜子</span></h3>` : ''}<div class="adm-cabinets">${items.map(cabinet=>`<article class="adm-cabinet"><div class="adm-cabinet-top"><h2>${escape(cabinet.name)}</h2>${icon('toolbox')}</div>${!compactCabinetCode(cabinet.code,cabinet.name) ? `<span class="adm-cabinet-code">${escape(cabinet.code)}</span>` : ''}${cabinet.location ? `<p>${escape(cabinet.location)}</p>` : ''}<div class="adm-cabinet-summary"><span>${cabinet.lock_count} 把锁</span><span>${cabinet.tool_count} 种工具</span></div>${locks.filter(lock=>lock.cabinet_id===cabinet.id).map(lock=>`<div class="adm-bound-lock">${icon('lock')}<span>${escape(lock.code)} · ${escape(lock.name)}</span><span>状态未知</span></div>`).join('')}${cabinet.notes?`<p class="adm-tool-note">${escape(cabinet.notes)}</p>`:''}<div class="adm-scan-links"><a href="/scan/${encodeURIComponent(cabinet.code)}" target="_blank" rel="noopener">柜子入口 ${icon('arrow')}</a><button class="adm-text" data-copy-scan="${escape(cabinet.code)}">复制链接</button><a href="/m/scan/${encodeURIComponent(cabinet.code)}" target="_blank" rel="noopener">手机预览</a></div>${controls('cabinets',cabinet.id)}</article>`).join('')}</div></section>`).join('') + '</div>';
   }
   function deviceTable(kind: 'locks'|'gateways'): string {
     const items = kind==='locks'?locks:gateways;
     if(!items.length) return empty(kind==='locks'?'暂无锁':'暂无网关','');
     return `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="${kind==='locks'?'锁':'网关'}设备列表"><table class="adm-table"><thead><tr><th>设备 / 编号</th><th>${kind==='locks'?'柜子 / 网关':'云端设备编号'}</th><th>状态</th><th>设备操作</th><th>管理</th></tr></thead><tbody>${items.map(item=>`<tr><td><strong>${escape(item.name)}</strong><small>${escape(item.code)}</small></td><td>${kind==='locks'?`${escape(cabinetName((item as Lock).cabinet_id))}<small>${escape(gatewayName((item as Lock).gateway_id))}</small>`:escape((item as Gateway).provider_gateway_id || '未配置')}</td><td><span class="adm-badge">未知</span></td><td><div class="adm-device-actions">${kind==='locks'?`<button class="adm-outline" data-admin-action="unlock" data-id="${item.id}">${icon('open')}开锁</button><button class="adm-outline" data-admin-action="lock" data-id="${item.id}">${icon('lock')}关锁</button>`:''}<button class="adm-text" data-admin-action="status" data-kind="${kind}" data-id="${item.id}">请求状态</button></div></td><td>${controls(kind,item.id)}</td></tr>`).join('')}</tbody></table></div>`;
   }
-  function loanTable(): string { return loans.length ? `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="借还记录"><table class="adm-table adm-loan-table"><thead><tr><th>使用人 / 编号</th><th>柜子</th><th>工具 / 数量</th><th>借用时间</th><th>归还时间</th><th>借用天数</th><th>状态</th></tr></thead><tbody>${loans.map(loan=>`<tr><td><strong>${escape(loan.user_name)}</strong><small>${escape(loan.school_code || '无人员编号')}</small></td><td>${escape(loan.cabinet_name)}<small>${escape(loan.cabinet_code)}</small></td><td>${escape(loan.tool_name)}<small>${loan.quantity} ${escape(tools.find(tool=>tool.id===loan.tool_id)?.unit || '件')}</small></td><td>${escape(formatDate(loan.borrowed_at))}</td><td>${escape(formatDate(loan.returned_at))}</td><td>${loan.days} 天</td><td><span class="adm-badge ${loan.returned_at?'is-returned':'is-active'}">${loan.returned_at?'已归还':'借用中'}</span></td></tr>`).join('')}</tbody></table></div>` : empty('暂无借还记录',''); }
+  function loanTable(): string { return loans.length ? `<div class="adm-table-scroll" tabindex="0" role="region" aria-label="借还记录"><table class="adm-table adm-loan-table"><thead><tr><th>使用人 / 编号</th><th>柜子</th><th>工具 / 数量</th><th>借用时间</th><th>归还时间</th><th>借用天数</th><th>状态</th></tr></thead><tbody>${loans.map(loan=>`<tr><td><strong>${escape(loan.user_name)}</strong><small>${escape(loan.school_code || '无人员编号')}</small></td><td>${escape(loan.cabinet_name)}${!compactCabinetCode(loan.cabinet_code,loan.cabinet_name) ? `<small>${escape(loan.cabinet_code)}</small>` : ''}</td><td>${escape(loan.tool_name)}<small>${loan.quantity} ${escape(tools.find(tool=>tool.id===loan.tool_id)?.unit || '件')}</small></td><td>${escape(formatDate(loan.borrowed_at))}</td><td>${escape(formatDate(loan.returned_at))}</td><td>${loan.days} 天</td><td><span class="adm-badge ${loan.returned_at?'is-returned':'is-active'}">${loan.returned_at?'已归还':'借用中'}</span></td></tr>`).join('')}</tbody></table></div>` : empty('暂无借还记录',''); }
   function loanQuery(): string { return new URLSearchParams(Object.entries(filters).filter(([,value])=>!!value)).toString(); }
   async function loadLoans(): Promise<void> {
     const version=++loanRequest;
@@ -118,7 +138,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   }
   function bindContent(): void {
     root.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.go as View)));
-    root.querySelectorAll<HTMLButtonElement>('[data-device-tab]').forEach(button=>button.addEventListener('click',()=>{deviceTab=button.dataset.deviceTab as 'cabinets'|'locks'|'gateways';shell(`[data-device-tab="${deviceTab}"]`);}));
+    root.querySelectorAll<HTMLButtonElement>('[data-device-tab]').forEach(button=>button.addEventListener('click',()=>{deviceTab=button.dataset.deviceTab as 'cabinets'|'locks'|'gateways';shell(`[data-device-tab="${deviceTab}"]`, true);}));
     root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach(button=>button.addEventListener('click',()=>edit(button.dataset.add as Resource)));
     root.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach(button=>button.addEventListener('click',()=>edit(button.dataset.edit as Resource,Number(button.dataset.id))));
     root.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach(button=>button.addEventListener('click',()=>void remove(button.dataset.delete as Resource,Number(button.dataset.id),button)));

@@ -203,3 +203,33 @@
 @media(prefers-reduced-motion:reduce) { .admin-shell *,.admin-shell *::after,.adm-dialog,.adm-dialog * { animation:none!important; transition:none!important; } }
 
 @media(max-width:720px) { .admin-shell::before { width:200px; right:-65px; bottom:12vh; opacity:.06; } }
+
+/* Native select semantics with a styled picker where the browser supports it. */
+.adm-filter select,.adm-field select { cursor:pointer; transition:border-color 160ms,background-color 160ms; }
+.adm-filter select:hover,.adm-field select:hover { border-color:#6b9eaf; background-color:#f7fbfc; }
+@supports (appearance:base-select) and selector(::picker(select)) {
+  .adm-filter select,.adm-field select,.adm-filter select::picker(select),.adm-field select::picker(select) { appearance:base-select; }
+  .adm-filter select,.adm-field select { display:flex; align-items:center; gap:12px; padding-right:12px; }
+  .adm-filter select::picker-icon,.adm-field select::picker-icon { color:#467382; transition:rotate 180ms; }
+  .adm-filter select:open::picker-icon,.adm-field select:open::picker-icon { rotate:180deg; }
+  .adm-filter select:open,.adm-field select:open { border-color:#087c9c; background:#f0f8fa; }
+  .adm-filter select::picker(select),.adm-field select::picker(select) {
+    padding:5px; margin-top:6px; max-height:min(320px,60dvh); overflow:auto;
+    border:0; border-radius:10px; color:#203e4c; background:#fff;
+    box-shadow:0 8px 26px #173b4d25; scrollbar-width:thin; scrollbar-color:#8cbbc8 #f3f8fa;
+    opacity:0; transform:translateY(-4px);
+    transition:opacity 160ms,transform 160ms,display 160ms allow-discrete,overlay 160ms allow-discrete;
+  }
+  .adm-filter select:open::picker(select),.adm-field select:open::picker(select) { opacity:1; transform:translateY(0); }
+  @starting-style {
+    .adm-filter select:open::picker(select),.adm-field select:open::picker(select) { opacity:0; transform:translateY(-4px); }
+  }
+  .adm-filter option,.adm-field option { min-height:38px; padding:8px 10px; border-radius:6px; gap:10px; font:inherit; font-weight:450; transition:background-color 120ms; }
+  .adm-filter option:checked,.adm-field option:checked { color:#08657e; background:#e7f4f7; font-weight:650; }
+  .adm-filter option:hover,.adm-field option:hover,.adm-filter option:focus,.adm-field option:focus { outline:none; color:#16495c; background:#dceff4; }
+  .adm-filter option::checkmark,.adm-field option::checkmark { color:#087c9c; margin-left:auto; order:1; }
+}
+@media(max-width:720px) { .adm-filter option,.adm-field option { min-height:44px; } }
+@media(prefers-reduced-motion:reduce) {
+  .adm-filter select::picker(select),.adm-field select::picker(select),.adm-filter select::picker-icon,.adm-field select::picker-icon { transition:none; }
+}

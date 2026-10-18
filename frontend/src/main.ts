@@ -265,6 +265,11 @@ function setQuantity(id: number, raw: number): void {
   const plus = app.querySelector<HTMLButtonElement>(`[data-action="increase"][data-id="${id}"]`); if (plus) plus.disabled = value >= tool.available_quantity;
   updateSelection();
 }
+app.addEventListener('input', event => {
+  if (adminMounted || busy || listLoading || !(event.target instanceof HTMLInputElement)) return;
+  const input = event.target;
+  if (input.dataset.quantity && Number.isFinite(input.valueAsNumber)) setQuantity(Number(input.dataset.quantity), input.valueAsNumber);
+});
 app.addEventListener('change', event => {
   if (adminMounted || busy || listLoading || !(event.target instanceof HTMLInputElement)) return;
   const input = event.target;

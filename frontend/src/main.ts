@@ -118,10 +118,10 @@ function dock(): string {
 }
 function empty(title: string): string { return `<div class="empty-state">${icon('toolbox')}<p>${title}</p></div>`; }
 function borrowContent(): string {
-  const rows = tools.map(tool => {
+  const rows = [...tools].sort((a,b) => Number(a.available_quantity < 1) - Number(b.available_quantity < 1)).map(tool => {
     const name = localized(tool.name, tool.name_en), unit = localized(tool.unit, tool.unit_en);
     const description = localized(tool.description, tool.description_en);
-    const quantity = quantities.get(tool.id) ?? 1, unavailable = tool.available_quantity < 1;
+    const unavailable = tool.available_quantity < 1, quantity = unavailable ? 0 : quantities.get(tool.id) ?? 1;
     return `<div class="tool-row${selected.has(tool.id) ? ' is-selected' : ''}${unavailable ? ' is-unavailable' : ''}" data-row="${tool.id}"><label class="tool-select"><input type="checkbox" class="tool-checkbox" value="${tool.id}" ${selected.has(tool.id) ? 'checked' : ''} ${unavailable ? 'disabled' : ''}><span class="check-mark" aria-hidden="true">${icon('check')}</span><span class="tool-art">${toolArt(tool)}</span><span class="tool-info"><strong>${esc(name)}</strong>${description ? `<span class="tool-description">${esc(description)}</span>` : ''}<span>${t('available')} ${tool.available_quantity} ${esc(unit)}</span></span></label><div class="quantity-control"><button data-action="decrease" data-id="${tool.id}" aria-label="${esc(name)}: ${t('decrease')}" ${unavailable || quantity <= 1 ? 'disabled' : ''}>−</button><input type="number" inputmode="numeric" min="1" max="${tool.available_quantity}" value="${quantity}" data-quantity="${tool.id}" aria-label="${esc(name)}: ${t('quantity')}" ${unavailable ? 'disabled' : ''}><button data-action="increase" data-id="${tool.id}" aria-label="${esc(name)}: ${t('increase')}" ${unavailable || quantity >= tool.available_quantity ? 'disabled' : ''}>+</button></div><span class="tool-unit">${esc(unit)}</span></div>`;
   }).join('');
   return `<section class="workspace">${heading(t('choose'))}<div class="list-scroll">${listLoading ? empty(t('loading')) : listError ? `<div class="empty-state"><button class="secondary-button" data-action="borrow">${t('retry')}</button></div>` : rows ? `<div class="tool-list">${rows}</div>` : empty(t('emptyTools'))}</div>${dock()}</section>`;

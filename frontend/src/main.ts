@@ -55,7 +55,7 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const ticket = requestScope.begin();
   try {
     let response: Response;
-    try { response = await fetch(url, { ...init, credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.any([ticket.signal, AbortSignal.timeout(15000)]) }); }
+    try { response = await fetch(url, { ...init, credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.any([ticket.signal, init.signal ?? AbortSignal.timeout(15000)]) }); }
     catch { ticket.check(); throw new Error(t('network')); }
     ticket.check();
     if (!response.ok) {

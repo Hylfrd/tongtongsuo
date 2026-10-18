@@ -147,6 +147,28 @@ def cloud_cabinet_client(tmp_path, *, fail_lock=None):
 
 def test_assigned_cabinet_unlocks_only_server_selected_locks_without_loans(tmp_path):
     client, service, writes, identity = cloud_cabinet_client(tmp_path)
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    held, release = threading.Event(), threading.Event()
+    def occupy_device():
+        with service._lock:
+            held.set()
+            release.wait(5)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(occupy_device)
+        assert held.wait(2)
+        try:
+            busy = client.post('/api/cabinets/A/unlock')
+            assert busy.status_code == 409
+            assert busy.json()['detail']['code'] == 'DEVICE_BUSY'
+            assert writes == []
+        finally:
+            release.set()
+            pending.result(timeout=2)
+    with pytest.raises(HTTPException) as expired:
+        service._api('/v3/lock/unlock', {'lockId': '11'}, command=True, send_by=0)
+    assert expired.value.detail['code'] == 'COMMAND_EXPIRED'
+    assert writes == []
     response = client.post('/api/cabinets/A/unlock', json={'provider_lock_id': '13', 'cabinet_id': 2})
     assert response.status_code == 200
     assert response.json()['status'] == 'unlocked'

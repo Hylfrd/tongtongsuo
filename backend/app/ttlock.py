@@ -7,6 +7,7 @@ import stat
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -215,13 +216,15 @@ class TTLockService:
                     connection.execute("UPDATE ttlock_settings SET token='',refresh='',expires_at=0 WHERE id=1")
             raise
 
-    def _api(self, path, values=None, *, command=False):
+    def _api(self, path, values=None, *, command=False, send_by=None):
         config = self._configured()
         if not config['token'] or not config['refresh']:
             fail(503, 'HARDWARE_NOT_CONFIGURED', '请先连接通通锁账号，未向设备发送任何请求。')
         if config['expires_at'] <= time.time() + 60:
             config = self._refresh(config)
         for attempt in range(2):
+            if send_by is not None and time.monotonic() > send_by:
+                fail(409, 'COMMAND_EXPIRED', '设备准备耗时较长，未发送开关锁指令，请重新确认后操作。')
             data = {'clientId': config['client_id'], 'accessToken': self._decrypt(config['token']), 'date': int(time.time() * 1000), **(values or {})}
             body = self._request('POST' if command else 'GET', path, data, command=command)
             if not command and attempt == 0 and str(body.get('errcode')) in {'10003', '10004'}:
@@ -368,10 +371,20 @@ class TTLockService:
         if previous and time.time() - max(previous['started_at'], finished) < 5:
             fail(409, 'COMMAND_COOLDOWN', '操作过于频繁，请稍后请求状态。')
 
+    @contextmanager
+    def _command_slot(self):
+        if not self._lock.acquire(blocking=False):
+            fail(409, 'DEVICE_BUSY', '设备正在处理其他请求，未发送开关锁指令，请稍后再试。')
+        try:
+            yield
+        finally:
+            self._lock.release()
+
     def unlock_cabinet(self, cabinet_id, actor):
         # Hold the same lock across the complete cabinet operation, including
         # preflight, so another request cannot interleave its physical commands.
-        with self._lock:
+        send_by = time.monotonic() + 15
+        with self._command_slot():
             with self.database.transaction() as connection:
                 records = connection.execute('SELECT id FROM locks WHERE cabinet_id=? ORDER BY id', (cabinet_id,)).fetchall()
             if not records:
@@ -381,6 +394,8 @@ class TTLockService:
                 self._check_capability(provider_id, 'unlock')
                 with self.database.transaction() as connection:
                     self._command_ready(connection, provider_id)
+            if time.monotonic() > send_by:
+                fail(409, 'COMMAND_EXPIRED', '设备准备耗时较长，未发送开锁指令，请重新确认后操作。')
             actor_name = str(actor.get('name') or '使用人') if isinstance(actor, dict) else str(actor)
             if isinstance(actor, dict) and actor.get('school_code'):
                 actor_name += ' (' + str(actor['school_code']) + ')'
@@ -408,7 +423,8 @@ class TTLockService:
     def lock_action(self, record_id, action, actor, *, _capability_checked=False):
         if action not in {'unlock', 'lock', 'status'}:
             fail(422, 'INVALID_ACTION', '无效的锁操作。')
-        with self._lock:
+        send_by = time.monotonic() + 15
+        with (self._lock if action == 'status' else self._command_slot()):
             provider_id = self._device('locks', record_id)
             if action == 'status':
                 body = self._api('/v3/lock/queryOpenState', {'lockId': provider_id})
@@ -426,7 +442,7 @@ class TTLockService:
                 actor_name = str(actor.get('name') or actor.get('username') or actor.get('id') or 'admin') if isinstance(actor, dict) else str(actor or 'admin')
                 command_id = connection.execute("INSERT INTO ttlock_commands(lock_id,action,actor,started_at,outcome) VALUES(?,?,?,?,'pending')", (provider_id, action, actor_name[:128], time.time())).lastrowid
             try:
-                self._api('/v3/lock/' + action, {'lockId': provider_id}, command=True)
+                self._api('/v3/lock/' + action, {'lockId': provider_id}, command=True, send_by=send_by)
             except HTTPException as exc:
                 code = exc.detail.get('code', 'TTLOCK_ERROR') if isinstance(exc.detail, dict) else 'TTLOCK_ERROR'
                 outcome = 'unknown' if code == 'COMMAND_RESULT_UNKNOWN' else 'failed'

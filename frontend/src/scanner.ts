@@ -131,7 +131,7 @@ export async function openCabinetScanner(language: 'zh'|'en', onResult: (path: s
   dialog.addEventListener('cancel',event => { event.preventDefault(); close(); });
   dialog.addEventListener('close',close);
   camera.addEventListener('click',() => void startCamera());
-  dialog.querySelector('.scanner-upload')!.addEventListener('click',() => { stopCamera(); upload.click(); });
+  dialog.querySelector('.scanner-upload')!.addEventListener('click',() => { stopCamera(); releaseImage(); upload.click(); });
   upload.addEventListener('change',() => { const file = upload.files?.[0]; upload.value=''; if (file) void scanImage(file); });
   document.addEventListener('visibilitychange',visibility);
   window.addEventListener('pagehide',close);
@@ -140,5 +140,8 @@ export async function openCabinetScanner(language: 'zh'|'en', onResult: (path: s
   document.body.append(dialog);
   closeActive = close;
   dialog.showModal();
-  await startCamera();
+  // Permission prompts may remain pending even after our dialog is closed.
+  // Let the caller restore its launch button immediately; CameraLease still
+  // releases any stream delivered after close or another attempt.
+  void startCamera();
 }

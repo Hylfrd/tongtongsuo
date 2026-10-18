@@ -8,6 +8,7 @@ import { showToast } from './toast';
 import { validateForm, clearFieldError } from './validation';
 import { messages, type Language } from './i18n';
 import { shouldOpenAdmin } from './routing';
+import { licenseHref } from './license-navigation';
 import { RequestScope, StaleRequestError } from './request-scope';
 
 type Identity = { name: string; school_code: string | null; role?: 'admin' };
@@ -79,11 +80,21 @@ function cabinetLabel(): string {
   const standard = ['A', 'B'].includes(cabinet.code) && cabinet.name === `${cabinet.code}区`;
   return standard ? localized(cabinet.name, `Area ${cabinet.code}`) : `${cabinet.name}${cabinet.name === cabinet.code ? '' : ` · ${cabinet.code}`}`;
 }
-function headerActions(): string {
-  return `<div class="header-actions"><button class="text-button language-button" data-action="language" aria-label="${language === 'zh' ? 'Switch to English' : '切换为中文'}">${language === 'zh' ? 'EN' : '中文'}</button>${user ? `<button class="text-button" data-action="logout" ${busy ? 'disabled' : ''}>${icon('logout')}<span>${t('logout')}</span></button>` : ''}</div>`;
+function languageButton(): string {
+  return `<button class="text-button language-button" data-action="language" aria-label="${language === 'zh' ? 'Switch to English' : '切换为中文'}">${language === 'zh' ? 'EN' : '中文'}</button>`;
+}
+function logoutButton(): string {
+  return user ? `<button class="text-button logout-button" data-action="logout" ${busy ? 'disabled' : ''}>${icon('logout')}<span>${t('logout')}</span></button>` : '';
+}
+function licenseSource(): string {
+  const url = new URL(location.href);
+  url.searchParams.delete('signedOut'); url.searchParams.delete('passwordChanged');
+  url.searchParams.set('resume', view === 'unlock' ? mode : view);
+  url.searchParams.set('lang', language);
+  return url.pathname + url.search + url.hash;
 }
 function illustration(): string {
-  return `<div class="login-illustration">${cabinet ? `<span class="illustration-cabinet">${esc(cabinetLabel())}</span>` : ''}<div class="illustration-title"><span>${t('hall')}</span><strong>${t('title')}</strong></div><div class="illustration-stage" aria-hidden="true"><img class="scene-flower" src="${flower}" alt=""><div class="scene-wolf">${wolf()}</div><img class="scene-toolbox" src="${toolbox}" alt=""><img class="scene-screwdriver" src="${screwdriver}" alt=""></div></div>`;
+  return `<div class="login-illustration"><div class="illustration-title"><div class="illustration-meta"><span>${t('hall')}</span>${cabinet ? `<span class="illustration-cabinet">${esc(cabinetLabel())}</span>` : ''}</div><strong>${t('title')}</strong></div><div class="illustration-stage" aria-hidden="true"><img class="scene-flower" src="${flower}" alt=""><div class="scene-wolf">${wolf()}</div><img class="scene-toolbox" src="${toolbox}" alt=""><img class="scene-screwdriver" src="${screwdriver}" alt=""></div></div>`;
 }
 function toolArt(tool: {icon: string; icon_data: string | null}): string {
   const symbols: Record<string, IconName> = { tape: 'tape', hammer: 'hammer', pliers: 'pliers', toolbox: 'toolbox' };
@@ -91,10 +102,10 @@ function toolArt(tool: {icon: string; icon_data: string | null}): string {
 }
 function heading(title: string): string { return `<div class="workspace-heading"><button class="back-button" data-action="home" aria-label="${t('back')}">${icon('back')}</button><h1 tabindex="-1">${esc(title)}</h1></div>`; }
 function loginContent(): string {
-  return `<section class="login-layout">${illustration()}<div class="login-panel">${headerActions()}<span class="panel-symbol" aria-hidden="true">${icon('toolbox')}</span><h1 tabindex="-1">${t('login')}</h1><p class="login-hint">${t('loginHint')}</p>${!preview ? `<form id="login-form" method="post" novalidate><fieldset ${busy ? 'disabled' : ''}><div class="field"><label for="username">${t('username')}</label><div class="input-wrap">${icon('user')}<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="${t('accountHint')}" required></div></div><div class="field"><label for="password">${t('password')}</label><div class="input-wrap">${icon('key')}<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" placeholder="${t('passwordHint')}" required></div></div><button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
+  return `<section class="login-layout">${illustration()}<div class="login-panel"><div class="panel-heading"><h1 tabindex="-1">${t('login')}</h1>${languageButton()}</div><p class="login-hint">${t('loginHint')}</p>${!preview ? `<form id="login-form" method="post" novalidate><fieldset ${busy ? 'disabled' : ''}><div class="field"><label for="username">${t('username')}</label><div class="input-wrap">${icon('user')}<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="${t('accountHint')}" required></div></div><div class="field"><label for="password">${t('password')}</label><div class="input-wrap">${icon('key')}<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" placeholder="${t('passwordHint')}" required></div></div><button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
 }
 function scanContent(): string {
-  return `<section class="login-layout">${illustration()}<div class="scan-panel">${headerActions()}<h1 tabindex="-1" class="${cabinetError ? 'is-error' : ''}">${cabinetError ? t('invalidCabinet') : t('scan')}</h1><p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button>${cabinetError ? `<button class="text-button" data-action="retry-init">${t('retry')}</button>` : ''}</div></section>`;
+  return `<section class="login-layout">${illustration()}<div class="scan-panel"><div class="panel-heading"><h1 tabindex="-1" class="${cabinetError ? 'is-error' : ''}">${cabinetError ? t('invalidCabinet') : t('scan')}</h1>${languageButton()}</div>${logoutButton()}<p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button>${cabinetError ? `<button class="text-button" data-action="retry-init">${t('retry')}</button>` : ''}</div></section>`;
 }
 function homeContent(): string {
   return `<section class="home-layout"><h1 tabindex="-1">${t('welcome')}<span>${esc(user?.name)}</span></h1><div class="choice-layout"><button class="choice-card choice-borrow" data-action="borrow"><span class="choice-label">${t('borrow')} ${icon('arrow')}</span><span class="choice-art"><img src="${toolbox}" alt=""></span></button><button class="choice-card choice-return" data-action="return"><span class="choice-label">${t('return')} ${icon('arrow')}</span><span class="choice-art"><img src="${mascot}" alt=""></span></button></div></section>`;
@@ -131,15 +142,16 @@ function render(): void {
   app.dataset.view = view;
   const content = view === 'loading' ? empty(t('loading')) : view === 'scan' ? scanContent() : view === 'login' ? loginContent() : view === 'home' ? homeContent() : view === 'borrow' ? borrowContent() : view === 'return' ? returnContent() : view === 'unlock' ? unlockContent() : `<section class="scan-panel">${wolf()}<h1 tabindex="-1">${t('demoDone')}</h1><p>${t('previewOnly')}</p><button class="primary-button" data-action="home">${t('home')}</button></section>`;
   if (!app.querySelector('.page-shell')) {
-    app.innerHTML = `<main class="page-shell"><div class="page-tools"></div><div class="preview-slot"></div><div class="page-content"></div></main><footer class="site-footer"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="github-link" href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer">${githubIcon}</a></footer>`;
+    app.innerHTML = `<main class="page-shell"><div class="page-tools"></div><div class="preview-slot"></div><div class="page-content"></div></main><footer class="site-footer"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="license-link" href="${esc(licenseHref(licenseSource()))}">License</a><a class="github-link" href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer">${githubIcon}</a></footer>`;
   }
   const showHeader = !['loading', 'login', 'scan'].includes(view);
   const pageTools = app.querySelector<HTMLElement>('.page-tools')!;
   pageTools.hidden = !showHeader;
-  pageTools.innerHTML = showHeader ? `<div class="product-context"><span>${t('hall')} · ${t('title')}</span>${cabinet ? `<strong>${esc(cabinetLabel())}</strong>` : ''}</div>${headerActions()}` : '';
+  pageTools.innerHTML = showHeader ? `<div class="session-identity"><div class="product-context"><span class="product-hall">${t('hall')}</span><span class="product-name">${t('title')}</span></div><div class="session-controls">${cabinet ? `<strong class="session-cabinet">${esc(cabinetLabel())}</strong>` : ''}${languageButton()}</div></div>${logoutButton()}` : '';
   app.querySelector('.preview-slot')!.innerHTML = preview ? `<p class="preview-note">${t('preview')}</p>` : '';
   app.querySelector('.page-content')!.innerHTML = content;
   app.querySelector('.github-link')!.setAttribute('aria-label', t('source'));
+  app.querySelector('.license-link')!.setAttribute('href', licenseHref(licenseSource()));
   const loginForm = document.querySelector<HTMLFormElement>('#login-form');
   loginForm?.addEventListener('submit', event => void login(event));
   loginForm?.addEventListener('input', event => { if (event.target instanceof HTMLInputElement) clearFieldError(event.target); });
@@ -171,7 +183,7 @@ function setBusy(value: boolean): void {
   busy = value;
   const fields = document.querySelector<HTMLFieldSetElement>('#login-form fieldset');
   if (fields) fields.disabled = value;
-  document.querySelectorAll<HTMLButtonElement>('.header-actions button').forEach(button => button.disabled = value);
+  document.querySelectorAll<HTMLButtonElement>('.language-button,.logout-button').forEach(button => button.disabled = value);
   updateLoginButton(); updateSelection();
 }
 function updateLoginButton(): void {
@@ -216,7 +228,11 @@ async function enterAccount(freshLogin = false): Promise<void> {
     adminMounted = true; app.className = ''; delete app.dataset.view;
     await mountAdmin(app, user, async () => { await request('/api/auth/logout', {method:'POST'}); location.assign('/?signedOut=1'); });
   } else if (adminPath) { location.assign('/'); }
-  else move(cabinet ? 'home' : 'scan');
+  else {
+    const resume = new URLSearchParams(location.search).get('resume');
+    if (!freshLogin && cabinet && (resume === 'borrow' || resume === 'return')) await loadList(resume, true);
+    else await move(cabinet ? 'home' : 'scan');
+  }
 }
 async function logout(): Promise<void> {
   if (busy || opening) return;
@@ -234,10 +250,11 @@ async function logout(): Promise<void> {
 function previewTools(): Tool[] {
   return [['螺丝刀','Screwdriver','screwdriver'],['卷尺','Tape measure','tape'],['羊角锤','Claw hammer','hammer'],['尖嘴钳','Needle-nose pliers','pliers']].map(([name,name_en,toolIcon], index) => ({id:index+1,name,name_en,description:'',description_en:'',unit:'把',unit_en:'pc',icon:toolIcon,icon_data:null,available_quantity:3-loans.filter(loan=>loan.tool_id===index+1).reduce((n,l)=>n+l.quantity,0)}));
 }
-async function loadList(next: 'borrow' | 'return'): Promise<void> {
+async function loadList(next: 'borrow' | 'return', immediate = false): Promise<void> {
   if (!user || !cabinet || listLoading) return;
   const version = requestScope.version;
   mode = next; selected.clear(); quantities.clear(); listLoading = true; listError = false;
+  if (immediate) await move(next);
   const trigger = app.querySelector<HTMLButtonElement>(`[data-action="${next}"]`);
   if (trigger) { trigger.disabled = true; trigger.setAttribute('aria-busy','true'); }
   try {
@@ -319,6 +336,9 @@ app.addEventListener('click', event => {
   else if (action === 'increase' || action === 'decrease') { const id = Number(button.dataset.id); setQuantity(id, (quantities.get(id) ?? 1) + (action === 'increase' ? 1 : -1)); }
 });
 async function initialize(): Promise<void> {
+  if (location.pathname === '/license') { const {mountLicense} = await import('./license'); mountLicense(app); return; }
+  const query = new URLSearchParams(location.search);
+  if (query.has('resume')) language = query.get('lang') === 'en' ? 'en' : 'zh';
   invalidateRequests();
   const ticket = requestScope.begin();
   view = 'loading'; cabinetError = false; cabinet = null; render();

@@ -12,7 +12,7 @@ A shared toolbox borrowing, return and management system for Positive Education 
 
 ## Develop
 
-Requires Node.js 24 and Python 3.12+. Run all commands from the repository root.
+Requires Node.js 24 and Python 3.12+.
 
 Install and build the frontend, then create a Python virtual environment:
 
@@ -36,7 +36,7 @@ macOS / Linux:
 .venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
 ```
 
-Start the frontend in another terminal:
+Start
 
 ```sh
 npm --prefix frontend run dev

@@ -12,7 +12,7 @@
 
 ## Develop
 
-需要 Node.js 24 和 Python 3.12+。以下命令均在仓库根目录执行。
+需要 Node.js 24 和 Python 3.12+。
 
 安装并构建前端，创建 Python 虚拟环境：
 
@@ -36,7 +36,7 @@ macOS / Linux：
 .venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
 ```
 
-另开一个终端启动前端：
+启动
 
 ```sh
 npm --prefix frontend run dev

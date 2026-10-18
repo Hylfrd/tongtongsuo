@@ -95,7 +95,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     if (currentContent) {
       root.querySelector('#admin-page-title')!.textContent = titles[view];
       root.querySelector('.adm-license')?.setAttribute('href', licenseHref(`/admin?section=${view}`));
-      root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>{
+      root.querySelectorAll<HTMLAnchorElement>('[data-view]').forEach(button=>{
         if (button.dataset.view === view) button.setAttribute('aria-current','page');
         else button.removeAttribute('aria-current');
       });
@@ -110,9 +110,13 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       return;
     }
     disposeBackground?.();
-    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand" href="/"><img src="${mascot}" alt="正雅苑小狼"><span>正雅苑<small>共享工具箱</small></span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<button data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span>${view===key?'<i></i>':''}</button>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-icon-button" id="admin-refresh" aria-label="刷新数据" title="刷新数据">${icon('refresh')}</button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="adm-license" href="${escape(licenseHref(`/admin?section=${view}`))}">License</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
+    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand product-context" href="/"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<a class="adm-nav-link" href="/admin?section=${key}" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span></a>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-refresh-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="adm-license" href="${escape(licenseHref(`/admin?section=${view}`))}">License</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
     disposeBackground = installAmbient(root.querySelector<HTMLElement>('.admin-shell')!);
-    root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.view as View)));
+    root.querySelectorAll<HTMLAnchorElement>('[data-view]').forEach(link=>link.addEventListener('click',event=>{
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      navigate(link.dataset.view as View);
+    }));
     root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().catch(fail));
     root.querySelector('#admin-refresh')?.addEventListener('click',()=>void refresh());
     bindContent();
@@ -175,11 +179,11 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     root.querySelector<HTMLButtonElement>('#admin-export')?.addEventListener('click',event=>void exportLoans(event.currentTarget as HTMLButtonElement));
   }
   async function refresh(focusSelector = captureFocus()): Promise<void> {
-    const button=root.querySelector<HTMLButtonElement>('#admin-refresh');if(button)button.disabled=true;
+    const button=root.querySelector<HTMLButtonElement>('#admin-refresh');if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
     try {
       const [a,b,c,d,e]=await Promise.all([request<Overview>('/api/admin/overview'),request<{items:Cabinet[]}>('/api/admin/cabinets'),request<{items:Lock[]}>('/api/admin/locks'),request<{items:Gateway[]}>('/api/admin/gateways'),request<{items:Tool[]}>('/api/admin/tools')]);
       overview=a;cabinets=b.items;locks=c.items;gateways=d.items;tools=e.items;loaded=true;shell(focusSelector);if(view==='loans')await loadLoans();
-    } catch(error){if(!loaded){const target=root.querySelector('#admin-content');if(target){target.innerHTML=empty('加载失败','点击右上角刷新重试。');target.removeAttribute('aria-busy');}}fail(error);} finally {if(button){button.disabled=false;if(button.isConnected)restoreFocus(focusSelector);}}
+    } catch(error){if(!loaded){const target=root.querySelector('#admin-content');if(target){target.innerHTML=empty('加载失败','点击右上角刷新重试。');target.removeAttribute('aria-busy');}}fail(error);} finally {if(button){button.disabled=false;button.removeAttribute('aria-busy');if(button.isConnected)restoreFocus(focusSelector);}}
   }
   async function deviceAction(button: HTMLButtonElement): Promise<void> {
     const {adminAction:action,id,kind}=button.dataset;

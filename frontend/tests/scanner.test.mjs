@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 import jsQR from 'jsqr';
-import {CameraLease, parseCabinetQr} from '../src/scanner-core.ts';
+import {CameraLease, CameraLifecycle, coverCrop, parseCabinetQr, chooseNativeQrDetector, decodeWithDeadline} from '../src/scanner-core.ts';
 
 const origin = 'https://bnbu.hmcl-helper.cn';
 
@@ -73,4 +73,103 @@ test('jsQR decodes actual QR pixels without BarcodeDetector', async () => {
   assert.equal(parseCabinetQr(result.data,origin), '/scan/A');
   for (let index=0;index<pixels.length;index++) if (index%4 !== 3) pixels[index] = 255-pixels[index];
   assert.equal(jsQR(pixels,width,width,{inversionAttempts:'attemptBoth'})?.data, fixture.value);
+});
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('camera stops in background and resumes automatically with a fresh stream', async () => {
+  const streams=[], checks=[];
+  const life=new CameraLifecycle(async () => {const stream=camera(); streams.push(stream); return stream;},
+    async (_,current) => {checks.push(current);}, () => {}, error => assert.fail(String(error)));
+  await life.start();
+  assert.equal(checks[0](),true);
+  life.setVisible(false);
+  assert.deepEqual(streams[0].stops,[1,1]);
+  assert.equal(checks[0](),false);
+  life.setVisible(true);
+  await settle();
+  assert.equal(streams.length,2);
+  assert.equal(checks[1](),true);
+  life.close(); life.setVisible(false); life.setVisible(true);
+  await settle();
+  assert.deepEqual(streams[1].stops,[1,1]);
+  assert.equal(streams.length,2);
+});
+
+test('closing during foreground reacquisition stops a late stream and never restarts', async () => {
+  const first=camera(), late=camera();
+  let requests=0, allow, ready=0;
+  const life=new CameraLifecycle(() => ++requests===1 ? Promise.resolve(first) : new Promise(resolve => {allow=resolve;}),
+    async () => {ready++;}, () => {}, error => assert.fail(String(error)));
+  await life.start(); life.setVisible(false); life.setVisible(true);
+  life.close(); allow(late); await settle();
+  assert.equal(requests,2); assert.equal(ready,1);
+  assert.deepEqual(late.stops,[1,1]);
+});
+
+test('first permission granted after background round trip resumes without leaving a paused screen', async () => {
+  const discarded=camera(), active=camera();
+  let requests=0, allow, ready=0;
+  const life=new CameraLifecycle(() => ++requests===1 ? new Promise(resolve => {allow=resolve;}) : Promise.resolve(active),
+    async () => {ready++;}, () => {}, error => assert.fail(String(error)));
+  const first=life.start(); life.setVisible(false); life.setVisible(true);
+  allow(discarded); await first; await settle();
+  assert.equal(requests,2); assert.equal(ready,1);
+  assert.deepEqual(discarded.stops,[1,1]);
+  life.close(); assert.deepEqual(active.stops,[1,1]);
+});
+
+test('permission denial does not cause automatic prompts on returning to the tab', async () => {
+  let requests=0, errors=0;
+  const life=new CameraLifecycle(async () => {requests++; throw new DOMException('Denied','NotAllowedError');},
+    async () => assert.fail('No permission'), () => {}, () => {errors++;});
+  await life.start(); life.setVisible(false); life.setVisible(true); await settle();
+  assert.equal(requests,1); assert.equal(errors,1);
+  life.close();
+});
+
+test('asynchronous decoder results from a closed or paused stream cannot navigate', async () => {
+  let resolveDetection, accepted=0;
+  const decoded=new Promise(resolve => {resolveDetection=resolve;});
+  const life=new CameraLifecycle(async () => camera(), async (_,current) => {
+    void decoded.then(() => {if(current()) accepted++;});
+  }, () => {}, error => assert.fail(String(error)));
+  await life.start(); life.setVisible(false); life.close(); resolveDetection('/scan/A'); await settle();
+  assert.equal(accepted,0);
+});
+
+test('cover crop matches visible landscape-camera area on a portrait phone', () => {
+  const crop=coverCrop(1920,1080,390,844);
+  assert.ok(Math.abs(crop.width/crop.height-390/844)<1e-10);
+  assert.equal(crop.height,1080); assert.equal(crop.y,0);
+  assert.ok(Math.abs(crop.x-(1920-crop.width)/2)<1e-10);
+  assert.ok(crop.x>700); // Offscreen left/right codes must not be decoded.
+  assert.deepEqual(coverCrop(1080,1920,400,400),{x:0,y:420,width:1080,height:1080});
+  assert.deepEqual(coverCrop(1280,720,1280,720),{x:0,y:0,width:1280,height:720});
+  assert.equal(coverCrop(0,720,390,844),null);
+});
+
+test('native detection is selected only when QR support is advertised', async () => {
+  let options;
+  class Supported {
+    static async getSupportedFormats() { return ['qr_code','ean_13']; }
+    constructor(value) {options=value;}
+    async detect() {return [];}
+  }
+  assert.ok(await chooseNativeQrDetector(Supported) instanceof Supported);
+  assert.deepEqual(options,{formats:['qr_code']});
+  class Unsupported extends Supported {static async getSupportedFormats() {return ['ean_13'];}}
+  class Failed extends Supported {static async getSupportedFormats() {throw new Error('Unavailable');}}
+  assert.equal(await chooseNativeQrDetector(Unsupported),null);
+  assert.equal(await chooseNativeQrDetector(Failed),null);
+  assert.equal(await chooseNativeQrDetector(),null);
+});
+
+test('a hanging native detector yields to fallback and late native results are discarded', async () => {
+  let finish, accepted=false;
+  const pending=new Promise(resolve => {finish=resolve;});
+  await assert.rejects(decodeWithDeadline(pending,5).then(() => {accepted=true;}),/Decoder timeout/);
+  finish([{rawValue:'/scan/A'}]); await settle();
+  assert.equal(accepted,false);
+  assert.deepEqual(await decodeWithDeadline(Promise.resolve([{rawValue:'/scan/B'}])),[{rawValue:'/scan/B'}]);
 });

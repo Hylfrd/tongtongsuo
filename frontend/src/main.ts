@@ -51,6 +51,24 @@ function readIdentity(value: unknown): Identity {
       (candidate.school_code !== null && typeof candidate.school_code !== 'string')) throw new Error('Invalid identity');
   return { name: candidate.name, school_code: candidate.school_code, ...(candidate.role === 'admin' ? { role: 'admin' as const } : {}) };
 }
+async function enterAccount(): Promise<void> {
+  if (user?.role === 'admin') {
+    if (location.pathname !== '/admin') {
+      location.assign('/admin');
+      return;
+    }
+    const { mountAdmin } = await import('./admin');
+    await mountAdmin(app, user, async () => {
+      const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error('暂时无法退出，请检查网络后重试。');
+      location.assign('/');
+    });
+  } else if (location.pathname === '/admin') {
+    location.assign('/');
+  } else {
+    move('home');
+  }
+}
 async function responseMessage(response: Response, fallback: string): Promise<string> {
   try {
     const value: unknown = await response.json();
@@ -191,7 +209,7 @@ async function login(event: SubmitEvent): Promise<void> {
     user = readIdentity(await response.json());
     username.value = '';
     busy = false;
-    move('home');
+    await enterAccount();
   } catch {
     setNotice('未能确认登录结果，请检查网络后重试。密码已清空，请重新输入。', true);
   } finally {
@@ -285,7 +303,7 @@ async function restoreSession(): Promise<void> {
   if (preview) return;
   try {
     const response = await fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(8000) });
-    if (response.ok) { user = readIdentity(await response.json()); busy = false; move('home'); }
+    if (response.ok) { user = readIdentity(await response.json()); busy = false; await enterAccount(); }
     else if (response.status === 401) setNotice('');
     else setNotice('暂时无法检查登录状态，可尝试重新登录。', true);
   } catch { setNotice('暂时无法检查登录状态，请确认网络后再登录。', true); }

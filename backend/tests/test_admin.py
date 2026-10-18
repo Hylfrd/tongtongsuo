@@ -27,6 +27,11 @@ def create(client, kind, **values):
 
 
 def cabinet(client, code="A"):
+    existing = next((row for row in client.get("/api/admin/cabinets").json()["items"] if row["code"] == code), None)
+    if existing:
+        response = client.patch(f'/api/admin/cabinets/{existing["id"]}', json={"name": "一号工具柜", "group_name": "正雅苑", "location": "一楼"})
+        assert response.status_code == 200
+        return response.json()
     return create(client, "cabinets", code=code, name="一号工具柜", group_name="正雅苑", location="一楼")
 
 
@@ -42,8 +47,9 @@ def loan(database, tool, box, *, name="Alice", returned=False, days=3):
 
 def test_empty_database_and_durability(environment):
     client, database = environment
-    assert client.get("/api/admin/overview").json() == {"cabinet_count": 0, "lock_count": 0, "gateway_count": 0, "tool_count": 0, "active_loan_count": 0, "hardware_configured": False}
-    for kind in ["cabinets", "locks", "gateways", "tools", "loans"]:
+    assert client.get("/api/admin/overview").json() == {"cabinet_count": 2, "lock_count": 0, "gateway_count": 0, "tool_count": 0, "active_loan_count": 0, "hardware_configured": False}
+    assert [row["code"] for row in client.get("/api/admin/cabinets").json()["items"]] == ["A", "B"]
+    for kind in ["locks", "gateways", "tools", "loans"]:
         assert client.get(f"/api/admin/{kind}").json() == {"items": []}
     cabinet(client)
     other = FastAPI()
@@ -185,3 +191,18 @@ def test_icon_validation_and_quantity(environment):
     for bad in [-1, 1.5, "3", True]:
         assert client.post("/api/admin/tools", json={**payload, "quantity": bad}).status_code == 422
     assert client.post("/api/admin/tools", json={**payload, "icon": "unknown"}).status_code == 422
+
+
+def test_tool_units_and_translations(environment):
+    client, _ = environment
+    box = cabinet(client)
+    tool = create(client, "tools", cabinet_id=box["id"], name="卷尺")
+    assert tool["unit"] == "件"
+    fields = {"unit": "把", "unit_en": "pcs", "name_en": "Tape measure", "description_en": "Five metres"}
+    response = client.patch(f'/api/admin/tools/{tool["id"]}', json=fields)
+    assert response.status_code == 200
+    assert all(response.json()[key] == value for key, value in fields.items())
+    assert all(client.get("/api/admin/tools").json()["items"][0][key] == value for key, value in fields.items())
+    for invalid in ("", "   ", "x" * 17, None):
+        assert client.patch(f'/api/admin/tools/{tool["id"]}', json={"unit": invalid}).status_code == 422
+        assert client.post("/api/admin/tools", json={"cabinet_id": box["id"], "name": "Bad unit", "unit": invalid}).status_code == 422

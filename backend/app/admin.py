@@ -56,7 +56,11 @@ class Lock(Input):
 class Tool(Input):
     cabinet_id: Annotated[int, Field(gt=0, strict=True)]
     name: Name
+    name_en: Annotated[str, Field(max_length=120)] = ""
     description: Note = ""
+    description_en: Note = ""
+    unit: Annotated[str, Field(min_length=1, max_length=16)] = "件"
+    unit_en: Annotated[str, Field(max_length=32)] = ""
     notes: Note = ""
     quantity: Annotated[int, Field(ge=0, le=1000000, strict=True)] = 1
     icon: Icon = "toolbox"

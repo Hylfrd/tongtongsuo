@@ -1,4 +1,4 @@
-"""Small durable inventory database; no production fixtures or school secrets."""
+"""Durable inventory database with additive, transactional migrations."""
 
 import os
 import sqlite3
@@ -67,6 +67,25 @@ class Database:
         with self.connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + "\nCOMMIT;")
+        self._migrate()
+
+    def _migrate(self):
+        with self.transaction(write=True) as connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY)")
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(tools)")}
+            for name, default in (("unit", "件"), ("unit_en", ""), ("name_en", ""), ("description_en", "")):
+                if name not in columns:
+                    # Identifiers and defaults are fixed above, never user input.
+                    connection.execute(f"ALTER TABLE tools ADD COLUMN {name} TEXT NOT NULL DEFAULT '{default}'")
+            migration = "initial_area_cabinets_v1"
+            if connection.execute("SELECT 1 FROM schema_migrations WHERE name=?", (migration,)).fetchone() is None:
+                for code in ("A", "B"):
+                    connection.execute(
+                        "INSERT INTO cabinets (code,name,group_name) VALUES (?,?,?) ON CONFLICT(code) DO NOTHING",
+                        (code, f"{code}区", f"{code}区"),
+                    )
+                # A deleted or renamed cabinet must not reappear on restart.
+                connection.execute("INSERT INTO schema_migrations (name) VALUES (?)", (migration,))
 
     @contextmanager
     def connect(self):

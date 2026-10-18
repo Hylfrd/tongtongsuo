@@ -34,7 +34,7 @@
 .toast-dismiss svg { width: 20px; height: 20px; }
 .toast-dismiss:hover { background: #e8f3f7; color: #153b50; }
 .toast-dismiss:focus-visible { outline: 3px solid #007e9a; outline-offset: 2px; }
-.toast.is-leaving { animation: toast-leave 180ms ease-in both; }
+.toast.is-leaving { animation: toast-leave 260ms ease-out both; }
 @keyframes toast-enter { from { opacity: 0; transform: translateY(-16px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes toast-leave { to { opacity: 0; transform: translateY(-8px) scale(.98); } }
 @media (max-width: 720px) { .toast-stack { inset: 12px 12px auto; width: auto; } .toast { padding: 13px 8px 13px 14px; gap: 8px; } .toast p { font-size: 13px; } }

@@ -61,7 +61,7 @@ export function showToast(message: string, kind: Kind = 'error'): void {
         if (stack.hasAttribute('popover') && stack.matches(':popover-open')) stack.hidePopover();
         stack.remove();
       }
-    }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180);
+    }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 260);
   };
   const pause = (): void => {
     if (!timer) return;

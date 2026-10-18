@@ -39,20 +39,20 @@
   animation:ambient-zheng-sway 18s ease-in-out infinite;
 }
 @keyframes ambient-cyan-drift {
-  0%,100% { transform:scale(1.05) translate(0,0); }
-  50% { transform:scale(1.05) translate(12px,-10px); }
+  0%,100% { transform:scale(1.16) translate(0,0); }
+  50% { transform:scale(1.16) translate(clamp(24px,4vw,64px),clamp(-48px,-4vh,-24px)); }
 }
 @keyframes ambient-blue-drift {
-  0%,100% { transform:scale(1.05) translate(0,0); }
-  50% { transform:scale(1.05) translate(-14px,12px); }
+  0%,100% { transform:scale(1.16) translate(0,0); }
+  50% { transform:scale(1.16) translate(clamp(-72px,-4.5vw,-28px),clamp(24px,4vh,56px)); }
 }
 @keyframes ambient-circle-drift {
   0%,100% { transform:translate(0,0) rotate(-16deg); }
-  50% { transform:translate(18px,-14px) rotate(-10deg); }
+  50% { transform:translate(clamp(40px,5vw,80px),-56px) rotate(6deg); }
 }
 @keyframes ambient-zheng-sway {
   0%,100% { transform:translate(0,0) rotate(-8deg); }
-  50% { transform:translate(-7px,9px) rotate(-5deg); }
+  50% { transform:translate(-32px,36px) rotate(4deg); }
 }
 @media (max-width:760px) {
   .ambient-zheng { display:none; }

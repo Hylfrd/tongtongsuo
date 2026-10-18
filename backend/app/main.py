@@ -12,6 +12,8 @@ from app.auth import AuthManager
 from app.admin import create_admin_router
 from app.cabinets import create_cabinet_router
 from app.request_limits import AdminBodyLimitMiddleware
+from app.ai_settings import SettingsStore, create_ai_settings_router
+from app.ai_generation import create_ai_generation_router
 
 
 # Vite's default content fingerprint is eight URL-safe base64 characters.
@@ -53,6 +55,9 @@ def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -
     application.include_router(auth.router)
     application.include_router(create_admin_router(auth.require_admin, db_path))
     application.include_router(create_cabinet_router(auth.require_user, db_path))
+    ai_settings = SettingsStore(db_path)
+    application.include_router(create_ai_settings_router(auth.require_admin, ai_settings))
+    application.include_router(create_ai_generation_router(auth.require_admin, ai_settings, db_path))
 
     @application.middleware("http")
     async def private_api_responses(request: Request, call_next):

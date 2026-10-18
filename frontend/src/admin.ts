@@ -3,6 +3,7 @@ import { installAmbient } from './ambient';
 import { showToast } from './toast';
 import { licenseHref } from './license-navigation';
 import { validateForm, clearFieldError, markFieldError } from './validation';
+import { createAISettings, attachIconGenerator } from './ai-settings';
 import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
 import { icon, githubIcon, type IconName } from './icons';
@@ -34,11 +35,13 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   let passwordChangePending = false;
   let filters = {q:'', cabinet_id:'', status:'all', sort:'borrowed_at', direction:'desc'};
   const titles: Record<View, string> = {overview:'概览',devices:'柜子与设备',tools:'工具管理',loans:'借还记录',other:'其他'};
+  const aiSettings = createAISettings(request);
+  window.addEventListener('pagehide',()=>aiSettings.dispose(),{once:true});
 
   async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await fetch(url, {signal:AbortSignal.timeout(15000), ...init, credentials:'same-origin', cache:'no-store', headers:{...(init?.body ? {'Content-Type':'application/json'} : {}), ...init?.headers}});
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) forbidden = true;
+      if (response.status === 401 || response.status === 403) { forbidden = true; aiSettings.dispose(); }
       let message = response.status === 401 ? '登录已过期，请重新登录。' : response.status === 403 ? '当前账号没有管理权限。' : `请求未完成（${response.status}），请稍后重试。`;
       try { const body = await response.json(); if (typeof body.detail === 'string') message = body.detail; else if (body.detail && typeof body.detail.message === 'string') message = body.detail.message; else if (Array.isArray(body.detail)) message = '填写内容不符合要求，请检查字段长度、格式和数量。'; } catch { /* Keep a useful message for proxy errors. */ }
       throw new Error(message);
@@ -119,13 +122,13 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       event.preventDefault();
       navigate(link.dataset.view as View);
     }));
-    root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().catch(fail));
+    root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().then(()=>aiSettings.dispose()).catch(fail));
     root.querySelector('#admin-refresh')?.addEventListener('click',()=>void refresh());
     bindContent();
     restoreFocus(focusSelector);
   }
   function content(): string {
-    if(view==='other') return `<section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section>`;
+    if(view==='other') return `<section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section><div id="admin-ai-settings"></div>`;
     if(view==='overview') {
       const stats = overview!;
       const value = (number: number | null | undefined): number => typeof number === 'number' && Number.isFinite(number) ? Math.max(0,number) : 0;
@@ -171,6 +174,8 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     form.addEventListener('change',clear);
   }
   function bindContent(): void {
+    const aiTarget = root.querySelector('#admin-ai-settings');
+    if(aiTarget)aiSettings.mount(aiTarget);
     root.querySelector('#admin-password')?.addEventListener('click',changePassword);
     root.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.go as View)));
     root.querySelectorAll<HTMLButtonElement>('[data-device-tab]').forEach(button=>button.addEventListener('click',()=>{deviceTab=button.dataset.deviceTab as 'cabinets'|'locks'|'gateways';shell(`[data-device-tab="${deviceTab}"]`, true);}));
@@ -326,6 +331,19 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     let fields=kind==='tools'?`<label class="adm-field adm-wide">所在柜子 <span aria-hidden="true">*</span><select name="cabinet_id" required>${options(cabinets,source.cabinet_id??toolCabinet,'请选择柜子')}</select></label>${text('name','工具名称',true)}${text('name_en','英文名称（选填）')}<label class="adm-field">总数量 <span aria-hidden="true">*</span><input name="quantity" type="number" min="0" max="100000" step="1" value="${escape(source.quantity??1)}" required></label><label class="adm-field">单位 <span aria-hidden="true">*</span><input name="unit" value="${escape(source.unit || '件')}" maxlength="16" required list="admin-tool-units"><datalist id="admin-tool-units"><option value="件"><option value="把"><option value="个"><option value="套"><option value="卷"><option value="副"></datalist></label>${text('unit_en','英文单位（选填）',false,32)}<label class="adm-field">工具图标<select name="icon">${Object.entries(toolIcons).map(([key,value])=>`<option value="${key}" ${source.icon===key?'selected':''}>${value.label}</option>`).join('')}</select></label><label class="adm-field">自定义图片<input name="image" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG / JPEG / WebP，最大 512 KB</small></label>${source.icon_data?'<label class="adm-checkbox adm-wide"><input type="checkbox" name="clear_image">移除现有自定义图片</label>':''}${area('description','描述 / 使用说明')}${area('description_en','英文描述（选填）')}${area('notes','备注')}`:`${text('code','内部编号',true,64)}${text('name',`${noun}名称`,true)}${kind==='cabinets'?`<label class="adm-field">柜子分组<input name="group_name" value="${escape(source.group_name)}" maxlength="120" list="admin-cabinet-groups"><datalist id="admin-cabinet-groups">${[...new Set(['A区','B区',...cabinets.map(cabinet=>cabinet.group_name).filter(Boolean)])].map(group=>`<option value="${escape(group)}">`).join('')}</datalist></label>${text('location','所在位置')}`:kind==='locks'?`<label class="adm-field">所在柜子<select name="cabinet_id">${options(cabinets,source.cabinet_id,'暂不分配')}</select></label><label class="adm-field">绑定网关<select name="gateway_id">${options(gateways,source.gateway_id,'暂不绑定')}</select></label>${text('provider_lock_id','通通锁设备编号（可留空）',false,64)}`:text('provider_gateway_id','通通锁网关编号（可留空）',false,64)}${area('notes','备注')}`;
     const dialog=document.createElement('dialog');dialog.className='adm-dialog';dialog.setAttribute('aria-labelledby','admin-dialog-title');dialog.innerHTML=`<form class="adm-edit-form" novalidate><div class="adm-dialog-head"><div><h2 id="admin-dialog-title">${id?'编辑':'添加'}${noun}</h2></div><button type="button" class="adm-dialog-close" aria-label="关闭">${closeIcon}</button></div><div class="adm-form-grid">${fields}</div><div class="adm-form-actions"><button type="button" class="adm-outline" data-cancel>取消</button><button type="submit" class="adm-button">保存${noun}</button></div></form>`;
     root.append(dialog);const previousFocus=document.activeElement as HTMLElement|null;
+    let generatedIcon: string | undefined;
+    if(kind==='tools') {
+      const form=dialog.querySelector<HTMLFormElement>('form')!;
+      const target=document.createElement('div');target.className='adm-wide';form.querySelector('[name="image"]')!.closest('label')!.after(target);
+      const generator=attachIconGenerator(target,request,{
+        details:()=>({name:(form.elements.namedItem('name') as HTMLInputElement).value.trim(),description:(form.elements.namedItem('description') as HTMLTextAreaElement).value.trim(),...(id?{tool_id:id}:{})}),
+        apply:image=>{generatedIcon=image;(form.elements.namedItem('image') as HTMLInputElement).value='';const clear=form.elements.namedItem('clear_image') as HTMLInputElement|null;if(clear)clear.checked=false;},
+        openSettings:()=>{if(window.confirm('关闭工具编辑并前往生图设置？未保存的工具修改会丢失。')){dialog.close();navigate('other');}},
+      });
+      form.querySelector('[name="image"]')?.addEventListener('change',()=>{generatedIcon=undefined;generator.clearSelection();const clear=form.elements.namedItem('clear_image') as HTMLInputElement|null;if(clear)clear.checked=false;});
+      form.querySelector('[name="clear_image"]')?.addEventListener('change',()=>{generatedIcon=undefined;generator.clearSelection();});
+      dialog.addEventListener('close',()=>generator.dispose(),{once:true});
+    }
     const returnFocusSelector = id ? `[data-edit="${kind}"][data-id="${id}"]` : `[data-add="${kind}"]`;
     dialog.addEventListener('close',()=>{dialog.remove();if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});});dialog.querySelector('.adm-dialog-close')?.addEventListener('click',()=>dialog.close());dialog.querySelector('[data-cancel]')?.addEventListener('click',()=>dialog.close());
     wireValidation(dialog.querySelector<HTMLFormElement>('form')!);
@@ -336,7 +354,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
         if(kind==='locks'){payload.cabinet_id=payload.cabinet_id?Number(payload.cabinet_id):null;payload.gateway_id=payload.gateway_id?Number(payload.gateway_id):null;payload.provider_lock_id=payload.provider_lock_id||null;}
         if(kind==='gateways')payload.provider_gateway_id=payload.provider_gateway_id||null;
         if(kind==='tools'){
-          payload.quantity=Number(payload.quantity);payload.cabinet_id=Number(payload.cabinet_id);payload.icon_data=data.has('clear_image')?null:source.icon_data??null;
+          payload.quantity=Number(payload.quantity);payload.cabinet_id=Number(payload.cabinet_id);payload.icon_data=data.has('clear_image')?null:generatedIcon??source.icon_data??null;
           const file=data.get('image');if(file instanceof File && file.size){if(file.size>512*1024||!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('请选择小于 512 KB 的 PNG、JPEG 或 WebP 图片。');payload.icon_data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('图片读取失败，请重新选择。'));reader.readAsDataURL(file);});}
         }
         await request(`/api/admin/${kind}${id?`/${id}`:''}`,{method:id?'PATCH':'POST',body:JSON.stringify(payload)});dialog.close();await refresh(returnFocusSelector);notice(`${noun}已保存。`);

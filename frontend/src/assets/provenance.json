@@ -1,0 +1,55 @@
+{
+  "mascot.png": {
+    "kind": "provided residence artwork",
+    "source": "正雅苑/新生论坛/正雅苑大一苑舍日论坛_fix.pptx, ppt/media/image1.png, slides 1 and 8",
+    "rights": "Residence artwork supplied by the project maintainer; original rights retained."
+  },
+  "zheng-logo.png": {
+    "kind": "provided residence artwork",
+    "source": "正雅苑/新生小册子/正雅苑新生入宿指南_7.24.pdf, page 9, X4",
+    "rights": "Residence artwork supplied by the project maintainer; original rights retained."
+  },
+  "flower.png": {
+    "kind": "provided residence artwork",
+    "source": "正雅苑/新生小册子/正雅苑新生入宿指南_7.24.pdf, page 28, X4",
+    "rights": "Residence artwork supplied by the project maintainer; original rights retained."
+  },
+  "screwdriver.png": {
+    "kind": "generated",
+    "model": "gpt-image-2.5-sunburst",
+    "operation": "generate",
+    "requested_size": [
+      1024,
+      1024
+    ],
+    "source_size": [
+      1254,
+      1254
+    ],
+    "size_ok": false,
+    "prompt": "Create a single isolated screwdriver illustration as a premium friendly vector-style icon for a Chinese university residence hall shared toolbox web app. Square canvas. One chunky Phillips screwdriver, diagonally leaning from bottom left to upper right, tip pointing upper right. Rich cyan and sky blue molded handle (#16B7D2, #63D9EC), deep inky navy (#123A55) clean slightly organic bold outline, pale silver blue steel shaft, subtle two-tone flat cel shading and a tiny warm butter yellow accent on the end of the handle. Clear recognizable silhouette, tasteful rounded cartoon proportions, screenprint-like flat shapes with impeccable edges. Matches a playful turquoise residence wolf mascot but DO NOT draw any animal. Editorial illustration, not realistic 3D, no gradients, no gloss, no text, no letters, no logos, no badges, no border, no scene. Center the complete object with 15% breathing room and preserve the tip. Transparent background, with no cast shadow. This is a standalone foreground layer to be composited on a very pale blue UI. High craft, stylish and simple enough to read at 64px.",
+    "note": "Resized for web delivery. Separate transparent illustration layer."
+  },
+  "toolbox.png": {
+    "kind": "generated",
+    "model": "gpt-image-2.5-sunburst",
+    "operation": "edit",
+    "requested_size": [
+      1024,
+      1024
+    ],
+    "source_size": [
+      1254,
+      1254
+    ],
+    "size_ok": false,
+    "prompt": "Create an isolated open shared toolbox illustration, a single compositing layer for a friendly Chinese residence hall web app. Exactly match the attached screwdriver's visual system: rich cyan #16B7D2 and sky blue molded surfaces, dark inky navy #123A55 outline with clear clean slightly organic curves, flat two-tone cel shading, pale blue silver and tiny warm butter yellow details. The main object is a charming sturdy rectangular cyan portable toolbox in three-quarter view, lid open backwards and to the upper left, showing tidy compartments with a small silver wrench and one yellow measuring tape inside. Box front faces camera, handle and yellow metal latch clearly visible, compact proportions. No screwdriver (it will be added separately as another layer). Flat editorial vector illustration with 2D solid-color shapes, not shiny plastic CGI, not realistic 3D. No animals, no people, no text, no letters, no logos, no background, no floor, no cast shadow. Transparent background, square framing, complete silhouette uncropped with 12% breathing room all around. Designed to place next to a turquoise wolf mascot as a layered web header illustration.",
+    "note": "Resized for web delivery. Separate transparent illustration layer."
+  },
+  "display.woff": {
+    "kind": "subset font",
+    "source": "https://github.com/google/fonts/tree/main/ofl/zcoolkuaile",
+    "family": "ZCOOL KuaiLe",
+    "license": "SIL Open Font License 1.1; see OFL.txt"
+  }
+}

@@ -82,16 +82,21 @@ input::placeholder { color:#657b83; }
 .panel-symbol { display:grid; place-items:center; width:44px; height:44px; border-radius:13px; background:#d9eff4; color:#007e98; margin-bottom:18px; }
 .login-panel h1 { font-family:'Zhengya Display','PingFang SC',sans-serif; font-size:32px; font-weight:400; margin:0; }
 .login-hint { color:var(--muted); font-size:14px; margin-bottom:26px; }
-.input-wrap { display:flex; align-items:center; gap:11px; border:1px solid #c3d6dc; border-radius:10px; background:#fff; padding-left:14px; transition:border-color 200ms,background 200ms; }
+.input-wrap { --input-surface:#fff; display:flex; align-items:center; gap:11px; border:1px solid #c3d6dc; border-radius:10px; background:var(--input-surface); padding-left:14px; transition:border-color 200ms; }
 .input-wrap > svg { width:18px; height:18px; color:#658894; }
-.input-wrap:focus-within { border-color:var(--blue); background:#f4fcfd; }
+.input-wrap:focus-within { --input-surface:#f4fcfd; border-color:var(--blue); }
 .input-wrap input:focus { outline:none; }
-.input-wrap:has([aria-invalid="true"]) { border-color:#bd4646; background:#fff3f2; }
+.input-wrap:has([aria-invalid="true"]) { --input-surface:#fff3f2; border-color:#bd4646; }
 .field:has([aria-invalid="true"]) label { color:#ad3434; }
 .field { margin-bottom:15px; }
 .field label { display:block; font-size:13px; font-weight:650; margin-bottom:6px; }
 .field input { width:100%; min-width:0; min-height:48px; border:0; border-radius:10px; padding:11px 13px 11px 0; background:transparent; font-size:16px; }
 .field input:focus { border-color:#00869d; }
+/* Paint autofill with the same surface as the icon area, including focus and errors. */
+.input-wrap input:is(:autofill,:-webkit-autofill),.quantity-control input:is(:autofill,:-webkit-autofill) { box-shadow:0 0 0 1000px var(--input-surface,#fff) inset; -webkit-text-fill-color:var(--ink); caret-color:var(--blue); }
+@media (forced-colors:active) {
+  .input-wrap input:is(:autofill,:-webkit-autofill),.quantity-control input:is(:autofill,:-webkit-autofill) { box-shadow:none; -webkit-text-fill-color:FieldText; }
+}
 .login-panel .primary-button { width:100%; margin-top:7px; justify-content:space-between; background:#173f52; min-height:48px; }
 .preview-entry { margin-top:12px; width:100%; }
 .preview-note { font-size:12px; text-align:center; padding-top:8px; color:#72521c; }

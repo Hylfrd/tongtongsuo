@@ -77,7 +77,7 @@
 .adm-toolbar { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:16px; }
 .adm-toolbar .adm-filter { min-width:230px; }
 .adm-filter { display:grid; gap:5px; min-width:0; color:var(--adm-muted); font-size:12px; }
-.adm-filter input,.adm-filter select,.adm-field input,.adm-field select,.adm-field textarea { width:100%; min-width:0; min-height:38px; padding:8px 10px; border:1px solid #bfd3dc; border-radius:7px; background:white; color:var(--adm-ink,#203e4c); font:inherit; font-size:14px; caret-color:#087c9c; }
+.adm-filter input,.adm-filter select,.adm-field input,.adm-field select,.adm-field textarea { --input-surface:#fff; width:100%; min-width:0; min-height:38px; padding:8px 10px; border:1px solid #bfd3dc; border-radius:7px; background:var(--input-surface); color:var(--adm-ink,#203e4c); font:inherit; font-size:14px; caret-color:#087c9c; }
 .adm-filter input::placeholder,.adm-field input::placeholder { color:#607985; }
 .adm-filter select,.adm-field select { padding-right:28px; }
 .adm-tools { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
@@ -254,8 +254,12 @@
 
 /* Form feedback is inline color plus toast; controls retain keyboard focus. */
 .adm-field :is(input,select,textarea):focus,.adm-filter :is(input,select,textarea):focus { outline:none; box-shadow:none; border-color:#087c9c; }
-.adm-field :is(input,select,textarea)[aria-invalid="true"],.adm-filter :is(input,select,textarea)[aria-invalid="true"] { border-color:#bd473d; background:#fff3f1; }
+.adm-field :is(input,select,textarea)[aria-invalid="true"],.adm-filter :is(input,select,textarea)[aria-invalid="true"] { --input-surface:#fff3f1; border-color:#bd473d; background:var(--input-surface); }
 .adm-field :is(input,select,textarea)[aria-invalid="true"]:focus,.adm-filter :is(input,select,textarea)[aria-invalid="true"]:focus { border-color:#a82f25; background:#fff3f1; }
+.adm-field :is(input,textarea):is(:autofill,:-webkit-autofill),.adm-filter :is(input,textarea):is(:autofill,:-webkit-autofill) { box-shadow:0 0 0 1000px var(--input-surface) inset; -webkit-text-fill-color:var(--adm-ink,#203e4c); caret-color:#087c9c; }
+@media (forced-colors:active) {
+  .adm-field :is(input,textarea):is(:autofill,:-webkit-autofill),.adm-filter :is(input,textarea):is(:autofill,:-webkit-autofill) { box-shadow:none; -webkit-text-fill-color:FieldText; }
+}
 
 .adm-settings { max-width:720px; }
 .adm-setting-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 0; border-top:1px solid var(--adm-line); border-bottom:1px solid var(--adm-line); }

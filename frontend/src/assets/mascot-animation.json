@@ -1,0 +1,32 @@
+{
+  "asset": "mascot-blink.png",
+  "kind": "AI edited animation frame of provided residence artwork",
+  "source": "mascot.png; residence artwork supplied by project maintainer, original rights retained",
+  "operation": "edit",
+  "model": "gpt-image-2.5-sunburst",
+  "route": "relay",
+  "requested_size": [
+    1024,
+    1024
+  ],
+  "generated_size": [
+    1254,
+    1254
+  ],
+  "size_ok": false,
+  "delivered_size": [
+    720,
+    700
+  ],
+  "processing": "Trim alpha <= 1 border, contain without distortion in transparent 720x700 canvas.",
+  "crop_box": [
+    0,
+    0,
+    1254,
+    1220
+  ],
+  "generated_sha256": "34943717994f31d368494b2e06c09a086e6dc239f68f9a0be87f8d30e5c97fd8",
+  "prompt": "Edit the supplied transparent residence wolf mascot into ONE alternate animation frame for a subtle blink. The original image is the exact visual source of truth. Preserve the complete character, exact seated pose, tail, ears, silhouette, position, framing, proportions, turquoise blue and white colors, linework, shading, open smiling mouth, tongue, and existing 2005 emblem. Change ONLY both eyes into closed happy curved eyelids, naturally following the existing eye positions. Preserve the full original body and all existing marks without redrawing or redesigning them. This frame will alternate with the original on a website; body registration must remain consistent. Transparent RGBA background, no background panel, no shadow beyond the original, no text, no added props, no tools, no banner, no collage, no multiple poses, no animation grid. Center the same complete character in a square transparent canvas with no clipping.",
+  "local_metadata": "generated/zhengya-mascot-blink-20261018-152221-1024x1024.meta.json",
+  "note": "Alternate closed-eye expression; generated art has small changes in contour and shading relative to original."
+}

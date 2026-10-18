@@ -1,4 +1,4 @@
-"""Campus lock entry point; physical lock control remains disabled."""
+"""Campus toolbox entry point with administrator-managed lock integration."""
 
 import os
 import re
@@ -15,6 +15,7 @@ from app.request_limits import AdminBodyLimitMiddleware
 from app.ai_settings import SettingsStore, create_ai_settings_router
 from app.ai_generation import create_ai_generation_router
 from app.members import create_members_router
+from app.ttlock import TTLockService, create_ttlock_router
 
 
 # Vite's default content fingerprint is eight URL-safe base64 characters.
@@ -55,7 +56,9 @@ def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -
     application.add_middleware(AdminBodyLimitMiddleware)
     application.include_router(auth.router)
     application.include_router(create_members_router(auth.require_admin, auth.members))
-    application.include_router(create_admin_router(auth.require_admin, db_path))
+    ttlock = TTLockService(db_path)
+    application.include_router(create_ttlock_router(auth.require_admin, ttlock))
+    application.include_router(create_admin_router(auth.require_admin, db_path, ttlock))
     application.include_router(create_cabinet_router(auth.require_user, db_path))
     ai_settings = SettingsStore(db_path)
     application.include_router(create_ai_settings_router(auth.require_admin, ai_settings))

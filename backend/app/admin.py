@@ -1,4 +1,4 @@
-"""Cabinet-centered administration. Hardware actions deliberately fail closed."""
+"""Cabinet-centered administration and authenticated hardware control."""
 
 import base64
 import binascii
@@ -199,17 +199,23 @@ def usage_metrics(connection):
     }
 
 
-def create_admin_router(require_admin, db_path: Path | None = None):
+def create_admin_router(require_admin, db_path: Path | None = None, ttlock=None):
     database = Database(db_path)
     router = APIRouter(prefix="/api/admin", dependencies=[Depends(require_admin)])
 
+    def hardware_state(table, record):
+        if ttlock is not None and table in {"locks", "gateways"}:
+            record.update(ttlock.device_snapshot(table, record["id"]))
+        return record
+
     @router.get("/overview")
     def overview():
+        configured = bool(ttlock and ttlock.public()["connected"])
         with database.transaction() as connection:
             counts = {key: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for key, table in [("cabinet_count", "cabinets"), ("lock_count", "locks"), ("gateway_count", "gateways")]}
             counts["tool_count"] = connection.execute("SELECT COUNT(*) FROM tools WHERE archived=0").fetchone()[0]
             counts["active_loan_count"] = connection.execute("SELECT COUNT(*) FROM loans WHERE returned_at IS NULL").fetchone()[0]
-            return {**counts, **usage_metrics(connection), "hardware_configured": False}
+            return {**counts, **usage_metrics(connection), "hardware_configured": configured}
 
     def register(table, model):
         # table and model come only from the fixed declarations below.
@@ -221,7 +227,8 @@ def create_admin_router(require_admin, db_path: Path | None = None):
                     where.append("cabinet_id=?")
                     args.append(cabinet_id)
                 sql = f"SELECT * FROM {table}" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY id"
-                return {"items": [present(connection, table, row) for row in connection.execute(sql, args)]}
+                rows = [present(connection, table, row) for row in connection.execute(sql, args)]
+            return {"items": [hardware_state(table, row) for row in rows]}
 
         def create_record(payload: dict):
             values = validate(model, payload)
@@ -230,7 +237,8 @@ def create_admin_router(require_admin, db_path: Path | None = None):
                     columns = ",".join(values)
                     placeholders = ",".join("?" for _ in values)
                     result = connection.execute(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", list(values.values()))
-                    return present(connection, table, find(connection, table, result.lastrowid))
+                    record = present(connection, table, find(connection, table, result.lastrowid))
+                return hardware_state(table, record)
             except sqlite3.IntegrityError:
                 conflict()
 
@@ -249,7 +257,8 @@ def create_admin_router(require_admin, db_path: Path | None = None):
                             conflict("该工具尚有借用未归还，暂不能移动到其他柜子")
                     assignments = ",".join(f"{key}=?" for key in values)
                     connection.execute(f"UPDATE {table} SET {assignments} WHERE id=?", [*values.values(), record_id])
-                    return present(connection, table, find(connection, table, record_id))
+                    record = present(connection, table, find(connection, table, record_id))
+                return hardware_state(table, record)
             except sqlite3.IntegrityError:
                 conflict()
 
@@ -282,16 +291,20 @@ def create_admin_router(require_admin, db_path: Path | None = None):
     register("tools", Tool)
 
     @router.post("/locks/{record_id}/actions")
-    def lock_action(record_id: int, payload: Action):
+    def lock_action(record_id: int, payload: Action, user=Depends(require_admin)):
         with database.transaction() as connection:
             find(connection, "locks", record_id)
-        hardware_unavailable()
+        if ttlock is None:
+            hardware_unavailable()
+        return ttlock.lock_action(record_id, payload.action, user)
 
     @router.post("/gateways/{record_id}/status")
     def gateway_status(record_id: int):
         with database.transaction() as connection:
             find(connection, "gateways", record_id)
-        hardware_unavailable()
+        if ttlock is None:
+            hardware_unavailable()
+        return ttlock.gateway_status(record_id)
 
     def get_loans(
         sort: Literal["borrowed_at", "returned_at", "days", "user_name", "cabinet_name", "tool_name"] = "borrowed_at",

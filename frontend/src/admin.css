@@ -1,5 +1,4 @@
-.admin-shell::before { content:''; position:fixed; right:-70px; bottom:8vh; width:min(38vw,480px); aspect-ratio:1; background:#788891; mask:url('./assets/zheng-watermark.png') center/contain no-repeat; opacity:.08; transform:rotate(-8deg); pointer-events:none; z-index:-1; }
-.admin-shell { --adm-ink:#203e4c; --adm-muted:#526b78; --adm-line:#d8e5e9; --adm-cyan:#087c9c; position:relative; isolation:isolate; display:flex; flex-direction:column; min-height:100dvh; color:var(--adm-ink); background:linear-gradient(146deg,#eaf5f5 0 23%,transparent 23% 100%),linear-gradient(326deg,#ecf1f6 0 19%,transparent 19% 100%),#fafaf6; font-size:14px; line-height:1.5; }
+.admin-shell { --adm-ink:#203e4c; --adm-muted:#526b78; --adm-line:#d8e5e9; --adm-cyan:#087c9c; position:relative; isolation:isolate; display:flex; flex-direction:column; min-height:100dvh; color:var(--adm-ink); background:#fafaf6; font-size:14px; line-height:1.5; }
 .admin-shell *, .adm-dialog * { box-sizing:border-box; }
 .admin-shell h1,.admin-shell h2,.admin-shell h3,.admin-shell p,.adm-dialog h2,.adm-dialog p { margin:0; }
 .admin-shell button,.adm-dialog button,.adm-dialog input,.adm-dialog select,.adm-dialog textarea { font:inherit; }

@@ -21,6 +21,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 const preview = location.pathname !== '/admin' && new URLSearchParams(location.search).get('preview') === '1';
 const mobile = /^\/m(?:\/|$)/.test(location.pathname);
 const adminPath = location.pathname === '/admin';
+const mobileAdmin = (): boolean => mobile || (adminPath && new URLSearchParams(location.search).get('mobile') === '1') || matchMedia('(max-width:760px)').matches || /Android|iPhone|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const scanMatch = location.pathname.match(/^\/(?:m\/)?scan\/([^/]+)\/?$/);
 let cabinetCode: string | null = null;
 try { if (scanMatch) cabinetCode = decodeURIComponent(scanMatch[1]); } catch { /* An invalid QR is not a cabinet. */ }
@@ -225,7 +226,7 @@ async function login(event: Event): Promise<void> {
 }
 async function enterAccount(freshLogin = false): Promise<void> {
   if (shouldOpenAdmin(user?.role, location.pathname, freshLogin) && user) {
-    if (!adminPath) { location.assign('/admin'); return; }
+    if (!adminPath) { location.assign(mobileAdmin() ? '/admin?mobile=1' : '/admin'); return; }
     document.documentElement.lang = 'zh-CN';
     document.title = '正雅苑 · 工具箱管理';
     const {mountAdmin} = await import('./admin');
@@ -340,8 +341,9 @@ app.addEventListener('click', event => {
   else if (action === 'increase' || action === 'decrease') { const id = Number(button.dataset.id); setQuantity(id, (quantities.get(id) ?? 1) + (action === 'increase' ? 1 : -1)); }
 });
 async function initialize(): Promise<void> {
-  if (adminPath && (matchMedia('(max-width:760px)').matches || /Android|iPhone|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent))) {
+  if (adminPath && mobileAdmin()) {
     disposeAmbient?.(); disposeAmbient = undefined;
+    document.documentElement.lang = 'zh-CN'; document.title = '正雅苑 · 工具箱管理';
     app.className = 'admin-desktop-only'; app.innerHTML = '<p>请使用电脑访问</p>'; return;
   }
   if (location.pathname === '/license') { disposeAmbient?.(); disposeAmbient = undefined; const {mountLicense} = await import('./license'); mountLicense(app); return; }

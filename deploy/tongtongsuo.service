@@ -7,6 +7,10 @@ Type=simple
 DynamicUser=yes
 WorkingDirectory=/var/www/tongtongsuo/current/backend
 EnvironmentFile=/var/www/tongtongsuo/current/release.env
+EnvironmentFile=-/etc/tongtongsuo.env
+StateDirectory=tongtongsuo
+StateDirectoryMode=0700
+Environment=DATABASE_PATH=/var/lib/tongtongsuo/toolbox.sqlite3
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
 Environment=PUBLIC_ORIGIN=https://bnbu.hmcl-helper.cn

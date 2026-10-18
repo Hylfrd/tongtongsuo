@@ -71,7 +71,9 @@ cp -p "$caddyfile" "$backup/Caddyfile"
 caddy_hash=$(sha256sum "$caddyfile" | cut -d ' ' -f1)
 [[ ! -e "$unit" ]] || cp -p "$unit" "$backup/tongtongsuo.service"
 [[ ! -e "$site" ]] || cp -p "$site" "$backup/tongtongsuo.caddy"
+[[ ! -e /etc/tongtongsuo.env ]] || cp -p /etc/tongtongsuo.env "$backup/tongtongsuo.env"
 caddy_changed=false
+admin_config_changed=false
 
 rollback() {
   code=$?
@@ -88,6 +90,13 @@ rollback() {
     caddy validate --config "$caddyfile" --adapter caddyfile && systemctl reload caddy
   fi
   systemctl stop tongtongsuo
+  if $admin_config_changed; then
+    if [[ -e "$backup/tongtongsuo.env" ]]; then
+      cp -p "$backup/tongtongsuo.env" /etc/tongtongsuo.env
+    else
+      rm -f /etc/tongtongsuo.env
+    fi
+  fi
   if [[ -n "$previous" && -d "$previous" ]]; then
     ln -sfn "$previous" "$base/current.rollback"
     mv -Tf "$base/current.rollback" "$base/current"
@@ -107,6 +116,11 @@ rollback() {
 }
 trap rollback ERR
 
+if [[ -s "$incoming/admin.env" ]]; then
+  admin_config_changed=true
+  install -m 600 "$incoming/admin.env" /etc/tongtongsuo.env
+  rm -f "$incoming/admin.env"
+fi
 install -m 644 "$release/deploy/tongtongsuo.service" "$unit"
 ln -sfn "$release" "$base/current.next"
 mv -Tf "$base/current.next" "$base/current"

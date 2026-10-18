@@ -94,6 +94,7 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SSHPASS: ${{ secrets.SERVER_PASSWORD }}
           DEPLOY_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
         run: |
           if ! command -v sshpass >/dev/null; then
             sudo apt-get update -qq
@@ -104,6 +105,10 @@ jobs:
           options=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
           timeout 60s sshpass -e ssh "${options[@]}" "$destination" "mkdir -p '$remote_dir'"
           timeout 180s sshpass -e scp "${options[@]}" bundle/release.tar.gz bundle/deploy.sh "$destination:$remote_dir/"
+          if [[ -n "$ADMIN_PASSWORD_HASH" ]]; then
+            printf 'ADMIN_USERNAME=admin\nADMIN_PASSWORD_HASH=%s\n' "$ADMIN_PASSWORD_HASH" | \
+              timeout 60s sshpass -e ssh "${options[@]}" "$destination" "umask 077; cat > '$remote_dir/admin.env'"
+          fi
       - name: Activate release and verify HTTPS
         uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2
         env:

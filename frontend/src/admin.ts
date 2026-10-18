@@ -4,6 +4,7 @@ import { showToast } from './toast';
 import { licenseHref } from './license-navigation';
 import { validateForm, clearFieldError, markFieldError } from './validation';
 import { createAISettings, attachIconGenerator } from './ai-settings';
+import { createMemberSettings, mountMembers } from './member-settings';
 import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
 import { icon, githubIcon, type IconName } from './icons';
@@ -33,15 +34,24 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   let deviceTab: 'cabinets' | 'locks' | 'gateways' = 'cabinets';
   let loaded = false, forbidden = false, loanRequest = 0;
   let passwordChangePending = false;
-  let filters = {q:'', cabinet_id:'', status:'all', sort:'borrowed_at', direction:'desc'};
+  const initialFilters = new URLSearchParams(location.search);
+  let filters = {
+    q:view === 'loans' ? (initialFilters.get('q') ?? '').slice(0,120) : '',
+    cabinet_id:view === 'loans' ? initialFilters.get('cabinet_id') ?? '' : '',
+    status:view === 'loans' && ['active','returned'].includes(initialFilters.get('status') ?? '') ? initialFilters.get('status')! : 'all',
+    sort:view === 'loans' && ['returned_at','days','user_name','cabinet_name','tool_name'].includes(initialFilters.get('sort') ?? '') ? initialFilters.get('sort')! : 'borrowed_at',
+    direction:view === 'loans' && initialFilters.get('direction') === 'asc' ? 'asc' : 'desc',
+    school_code:view === 'loans' ? (initialFilters.get('school_code') ?? '').slice(0,128) : '',
+  };
   const titles: Record<View, string> = {overview:'概览',devices:'柜子与设备',tools:'工具管理',loans:'借还记录',other:'其他'};
   const aiSettings = createAISettings(request);
-  window.addEventListener('pagehide',()=>aiSettings.dispose(),{once:true});
+  const memberSettings = createMemberSettings(request);
+  window.addEventListener('pagehide',()=>{aiSettings.dispose();memberSettings.dispose();},{once:true});
 
   async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await fetch(url, {signal:AbortSignal.timeout(15000), ...init, credentials:'same-origin', cache:'no-store', headers:{...(init?.body ? {'Content-Type':'application/json'} : {}), ...init?.headers}});
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) { forbidden = true; aiSettings.dispose(); }
+      if (response.status === 401 || response.status === 403) { forbidden = true; aiSettings.dispose(); memberSettings.dispose(); }
       let message = response.status === 401 ? '登录已过期，请重新登录。' : response.status === 403 ? '当前账号没有管理权限。' : `请求未完成（${response.status}），请稍后重试。`;
       try { const body = await response.json(); if (typeof body.detail === 'string') message = body.detail; else if (body.detail && typeof body.detail.message === 'string') message = body.detail.message; else if (Array.isArray(body.detail)) message = '填写内容不符合要求，请检查字段长度、格式和数量。'; } catch { /* Keep a useful message for proxy errors. */ }
       throw new Error(message);
@@ -88,7 +98,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     if (view === next) return;
     view = next;
     const url = new URL(location.href);
-    url.searchParams.set('section',view);
+    url.search = view === 'loans' ? `section=loans&${loanQuery()}` : `section=${view}`;
     history.replaceState(null,'',url);
     shell('#admin-page-title', true);
     window.scrollTo({top:0,behavior:'instant'});
@@ -128,7 +138,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     restoreFocus(focusSelector);
   }
   function content(): string {
-    if(view==='other') return `<div id="admin-ai-settings"></div><section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section>`;
+    if(view==='other') return `<div id="admin-member-settings"></div><div id="admin-ai-settings"></div><section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section>`;
     if(view==='overview') {
       const stats = overview!;
       const value = (number: number | null | undefined): number => typeof number === 'number' && Number.isFinite(number) ? Math.max(0,number) : 0;
@@ -160,6 +170,10 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   function loanQuery(): string { return new URLSearchParams(Object.entries(filters).filter(([,value])=>!!value)).toString(); }
   async function loadLoans(): Promise<void> {
     const version=++loanRequest;
+    const url = new URL(location.href);
+    url.search = `section=loans&${loanQuery()}`;
+    history.replaceState(null,'',url);
+    root.querySelector('.adm-license')?.setAttribute('href',licenseHref(url.pathname+url.search));
     const target=root.querySelector<HTMLElement>('#admin-loan-result');
     if(target) target.setAttribute('aria-busy','true');
     try {const result=await request<{items:Loan[]}>(`/api/admin/loans?${loanQuery()}`); if(version!==loanRequest || view!=='loans')return; loans=result.items; const current=root.querySelector('#admin-loan-result'); if(current){current.innerHTML=loanTable();current.removeAttribute('aria-busy');} const count=root.querySelector('#admin-loan-count'); if(count) count.textContent=`${loans.length} 条`;}
@@ -174,6 +188,8 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     form.addEventListener('change',clear);
   }
   function bindContent(): void {
+    const memberTarget = root.querySelector('#admin-member-settings');
+    if(memberTarget)memberSettings.mount(memberTarget);
     const aiTarget = root.querySelector('#admin-ai-settings');
     if(aiTarget)aiSettings.mount(aiTarget);
     root.querySelector('#admin-password')?.addEventListener('click',changePassword);
@@ -198,12 +214,14 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     root.querySelectorAll<HTMLButtonElement>('[data-tool-loans]').forEach(button=>button.addEventListener('click',()=>{
       const tool = tools.find(item=>item.id===Number(button.dataset.toolLoans));
       if (!tool) return;
-      filters = {q:tool.name,cabinet_id:String(tool.cabinet_id),status:'all',sort:'borrowed_at',direction:'desc'};
+      filters = {q:tool.name,cabinet_id:String(tool.cabinet_id),status:'all',sort:'borrowed_at',direction:'desc',school_code:''};
       navigate('loans');
     }));
     const loanForm = root.querySelector<HTMLFormElement>('#admin-loan-filters');
     if (loanForm) wireValidation(loanForm);
-    loanForm?.addEventListener('submit',event=>{event.preventDefault();if (!validateForm(event.currentTarget as HTMLFormElement)) return;const form=new FormData(event.currentTarget as HTMLFormElement);filters={q:String(form.get('q')??'').trim(),cabinet_id:String(form.get('cabinet_id')??''),status:String(form.get('status')),sort:String(form.get('sort')),direction:String(form.get('direction'))};void loadLoans();});
+    let memberQueryEdited = false;
+    loanForm?.querySelector('[name="q"]')?.addEventListener('input',()=>{memberQueryEdited = true;});
+    loanForm?.addEventListener('submit',event=>{event.preventDefault();if (!validateForm(event.currentTarget as HTMLFormElement)) return;const form=new FormData(event.currentTarget as HTMLFormElement);filters={q:String(form.get('q')??'').trim(),cabinet_id:String(form.get('cabinet_id')??''),status:String(form.get('status')),sort:String(form.get('sort')),direction:String(form.get('direction')),school_code:memberQueryEdited ? '' : filters.school_code};memberQueryEdited=false;void loadLoans();});
     root.querySelector<HTMLButtonElement>('#admin-export')?.addEventListener('click',event=>void exportLoans(event.currentTarget as HTMLButtonElement));
   }
   async function refresh(focusSelector = captureFocus()): Promise<void> {
@@ -361,5 +379,6 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       }catch(error){if(forbidden){dialog.close();fail(error);}else showToast(errorMessage(error),'error');}finally{submit.disabled=false;}
     });dialog.showModal();
   }
+  if (section === 'members') { await mountMembers(root,request); return; }
   shell();await refresh();
 }

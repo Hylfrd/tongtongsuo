@@ -4,6 +4,7 @@ import base64
 import binascii
 import math
 import sqlite3
+import unicodedata
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -35,6 +36,16 @@ class Cabinet(Input):
     group_name: Annotated[str, Field(max_length=120)] = ""
     location: Annotated[str, Field(max_length=250)] = ""
     notes: Note = ""
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_scan_code(cls, value):
+        if isinstance(value, str) and any(
+            char in "/\\" or unicodedata.category(char) in {"Cc", "Cf", "Cs"}
+            for char in value
+        ):
+            raise ValueError("柜子编号不能包含斜杠或控制字符，请使用可扫码的单段编号")
+        return value
 
 
 class Gateway(Input):

@@ -210,3 +210,14 @@ def test_tool_units_and_translations(environment):
     for invalid in ("", "   ", "x" * 17, None):
         assert client.patch(f'/api/admin/tools/{tool["id"]}', json={"unit": invalid}).status_code == 422
         assert client.post("/api/admin/tools", json={"cabinet_id": box["id"], "name": "Bad unit", "unit": invalid}).status_code == 422
+
+
+def test_cabinet_codes_remain_single_scannable_path_segments(environment):
+    client, _ = environment
+    box = cabinet(client)
+    for code in ("A/1", "A\\1", "A\x00B", "A\nB", "A\x7fB", "A\u200bB"):
+        assert client.post("/api/admin/cabinets", json={"code": code, "name": "Invalid"}).status_code == 422
+        assert client.patch(f'/api/admin/cabinets/{box["id"]}', json={"code": code}).status_code == 422
+    assert create(client, "cabinets", code="正雅-C_01", name="New cabinet")["code"] == "正雅-C_01"
+    # Other device identifiers are not URLs and retain their existing contract.
+    assert create(client, "gateways", code="G/1", name="Gateway")["code"] == "G/1"

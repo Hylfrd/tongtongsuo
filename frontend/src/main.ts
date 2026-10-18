@@ -147,7 +147,7 @@ function render(): void {
   const showHeader = !['loading', 'login', 'scan'].includes(view);
   const pageTools = app.querySelector<HTMLElement>('.page-tools')!;
   pageTools.hidden = !showHeader;
-  pageTools.innerHTML = showHeader ? `<div class="session-identity"><div class="product-context"><span class="product-hall">${t('hall')}</span><span class="product-name">${t('title')}</span></div><div class="session-controls">${cabinet ? `<strong class="session-cabinet">${esc(cabinetLabel())}</strong>` : ''}${languageButton()}</div></div>${logoutButton()}` : '';
+  pageTools.innerHTML = showHeader ? `<div class="session-identity"><div class="product-context"><span class="product-hall">${t('hall')}</span><span class="product-name">${t('title')}</span></div><div class="session-controls">${cabinet ? `<strong class="session-cabinet">${esc(cabinetLabel())}</strong>` : ''}</div></div><div class="session-actions">${languageButton()}${logoutButton()}</div>` : '';
   app.querySelector('.preview-slot')!.innerHTML = preview ? `<p class="preview-note">${t('preview')}</p>` : '';
   app.querySelector('.page-content')!.innerHTML = content;
   app.querySelector('.github-link')!.setAttribute('aria-label', t('source'));

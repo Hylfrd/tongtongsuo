@@ -1,4 +1,5 @@
 import './style.css';
+import { installAmbient } from './ambient';
 import mascot from './assets/mascot-original.jpeg';
 import flower from './assets/flower.png';
 import screwdriver from './assets/screwdriver.png';
@@ -28,6 +29,7 @@ let view: View = 'loading', mode: 'borrow' | 'return' = 'borrow';
 let user: Identity | null = null, cabinet: Cabinet | null = null;
 let tools: Tool[] = [], loans: Loan[] = [];
 let selected = new Map<number, number>(), quantities = new Map<number, number>();
+let disposeAmbient: (() => void) | undefined;
 let busy = false, opening = false, previewOpened = false, adminMounted = false;
 let cabinetError = false, listError = false, listLoading = false;
 let loginBlockedUntil = 0;
@@ -142,7 +144,9 @@ function render(): void {
   app.dataset.view = view;
   const content = view === 'loading' ? empty(t('loading')) : view === 'scan' ? scanContent() : view === 'login' ? loginContent() : view === 'home' ? homeContent() : view === 'borrow' ? borrowContent() : view === 'return' ? returnContent() : view === 'unlock' ? unlockContent() : `<section class="scan-panel">${wolf()}<h1 tabindex="-1">${t('demoDone')}</h1><p>${t('previewOnly')}</p><button class="primary-button" data-action="home">${t('home')}</button></section>`;
   if (!app.querySelector('.page-shell')) {
+    disposeAmbient?.();
     app.innerHTML = `<main class="page-shell"><div class="page-tools"></div><div class="preview-slot"></div><div class="page-content"></div></main><footer class="site-footer"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="license-link" href="${esc(licenseHref(licenseSource()))}">License</a><a class="github-link" href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer">${githubIcon}</a></footer>`;
+    disposeAmbient = installAmbient(app);
   }
   const showHeader = !['loading', 'login', 'scan'].includes(view);
   const pageTools = app.querySelector<HTMLElement>('.page-tools')!;
@@ -225,6 +229,7 @@ async function enterAccount(freshLogin = false): Promise<void> {
     document.documentElement.lang = 'zh-CN';
     document.title = '正雅苑 · 工具箱管理';
     const {mountAdmin} = await import('./admin');
+    disposeAmbient?.(); disposeAmbient = undefined;
     adminMounted = true; app.className = ''; delete app.dataset.view;
     await mountAdmin(app, user, async () => { await request('/api/auth/logout', {method:'POST'}); location.assign('/?signedOut=1'); });
   } else if (adminPath) { location.assign('/'); }
@@ -336,15 +341,17 @@ app.addEventListener('click', event => {
   else if (action === 'increase' || action === 'decrease') { const id = Number(button.dataset.id); setQuantity(id, (quantities.get(id) ?? 1) + (action === 'increase' ? 1 : -1)); }
 });
 async function initialize(): Promise<void> {
-  if (location.pathname === '/license') { const {mountLicense} = await import('./license'); mountLicense(app); return; }
+  if (adminPath && (matchMedia('(max-width:760px)').matches || /Android|iPhone|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent))) {
+    disposeAmbient?.(); disposeAmbient = undefined;
+    app.className = 'admin-desktop-only'; app.innerHTML = '<p>请使用电脑访问</p>'; return;
+  }
+  if (location.pathname === '/license') { disposeAmbient?.(); disposeAmbient = undefined; const {mountLicense} = await import('./license'); mountLicense(app); return; }
   const query = new URLSearchParams(location.search);
   if (query.has('resume')) language = query.get('lang') === 'en' ? 'en' : 'zh';
   invalidateRequests();
   const ticket = requestScope.begin();
   view = 'loading'; cabinetError = false; cabinet = null; render();
   try {
-    await Promise.allSettled([document.fonts.load('32px "Zhengya Display"'), ...[mascot,toolbox,screwdriver].map(src => { const image = new Image(); image.src = src; return image.decode(); })]);
-    ticket.check();
     try {
       if (cabinetCode) { const result = await request<Cabinet>(endpoint()); ticket.check(); cabinet = result; }
     } catch (error) { ticket.check(); cabinetError = true; errorToast(error); }

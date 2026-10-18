@@ -5,7 +5,7 @@ import binascii
 import math
 import sqlite3
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Literal
@@ -152,6 +152,55 @@ def present(connection, table, record):
     return record
 
 
+def usage_metrics(connection):
+    local_timezone = timezone(timedelta(hours=8))
+    today = datetime.now(local_timezone).date()
+    users, borrow_visits, return_visits = set(), set(), set()
+
+    def timestamp(value):
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(local_timezone)
+
+    # Loans are item rows, without operation IDs. Group the items from the same
+    # person, cabinet and instant rather than counting every tool as a visit.
+    for row in connection.execute("SELECT id,school_code,cabinet_id,borrowed_at,returned_at FROM loans"):
+        school_code = (row["school_code"] or "").strip()
+        if school_code:
+            users.add(school_code)
+        # There is no user_id fallback in this schema. Do not merge unidentified
+        # people by their names or count an empty school code as a known user.
+        identity = ("school", school_code) if school_code else ("loan", row["id"])
+        borrow_visits.add((identity, row["cabinet_id"], timestamp(row["borrowed_at"])))
+        if row["returned_at"]:
+            return_visits.add((identity, row["cabinet_id"], timestamp(row["returned_at"])))
+
+    average_ratio = connection.execute(
+        """WITH outstanding AS (
+            SELECT tool_id,SUM(quantity) AS quantity FROM loans
+            WHERE returned_at IS NULL GROUP BY tool_id
+        ), cabinet_totals AS (
+            SELECT t.cabinet_id,SUM(t.quantity) AS total,
+                SUM(COALESCE(o.quantity,0)) AS borrowed
+            FROM tools t LEFT JOIN outstanding o ON o.tool_id=t.id
+            WHERE t.archived=0 GROUP BY t.cabinet_id
+        )
+        SELECT COALESCE(AVG(1.0*borrowed/total),0)
+        FROM cabinet_totals WHERE total>0"""
+    ).fetchone()[0]
+    first_day = min((visit[2].date() for visit in borrow_visits), default=today)
+    elapsed_days = max(1, (today - first_day).days + 1)
+    return {
+        "user_count": len(users),
+        "average_borrow_ratio": average_ratio,
+        "borrow_visit_count": len(borrow_visits),
+        "borrow_visits_per_day": len(borrow_visits) / elapsed_days,
+        "today_borrow_count": sum(visit[2].date() == today for visit in borrow_visits),
+        "today_return_count": sum(visit[2].date() == today for visit in return_visits),
+    }
+
+
 def create_admin_router(require_admin, db_path: Path | None = None):
     database = Database(db_path)
     router = APIRouter(prefix="/api/admin", dependencies=[Depends(require_admin)])
@@ -162,7 +211,7 @@ def create_admin_router(require_admin, db_path: Path | None = None):
             counts = {key: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for key, table in [("cabinet_count", "cabinets"), ("lock_count", "locks"), ("gateway_count", "gateways")]}
             counts["tool_count"] = connection.execute("SELECT COUNT(*) FROM tools WHERE archived=0").fetchone()[0]
             counts["active_loan_count"] = connection.execute("SELECT COUNT(*) FROM loans WHERE returned_at IS NULL").fetchone()[0]
-            return {**counts, "hardware_configured": False}
+            return {**counts, **usage_metrics(connection), "hardware_configured": False}
 
     def register(table, model):
         # table and model come only from the fixed declarations below.

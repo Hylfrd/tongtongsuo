@@ -51,7 +51,7 @@ def loan(database, tool, box, *, name="Alice", returned=False, days=3):
 
 def test_empty_database_and_durability(environment):
     client, database = environment
-    assert client.get("/api/admin/overview").json() == {"cabinet_count": 2, "lock_count": 0, "gateway_count": 0, "tool_count": 0, "active_loan_count": 0, "hardware_configured": False}
+    assert client.get("/api/admin/overview").json() == {"cabinet_count": 2, "lock_count": 0, "gateway_count": 0, "tool_count": 0, "active_loan_count": 0, "user_count": 0, "average_borrow_ratio": 0, "borrow_visit_count": 0, "borrow_visits_per_day": 0, "today_borrow_count": 0, "today_return_count": 0, "hardware_configured": False}
     assert [row["code"] for row in client.get("/api/admin/cabinets").json()["items"]] == ["A", "B"]
     for kind in ["locks", "gateways", "tools", "loans"]:
         assert client.get(f"/api/admin/{kind}").json() == {"items": []}

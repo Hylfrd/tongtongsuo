@@ -82,7 +82,7 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -104,7 +104,7 @@ jobs:
           remote_dir="/var/www/tongtongsuo/incoming/$DEPLOY_RUN"
           options=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
           timeout 60s sshpass -e ssh "${options[@]}" "$destination" "mkdir -p '$remote_dir'"
-          timeout --kill-after=15s 360s sshpass -e scp "${options[@]}" bundle/release.tar.gz bundle/deploy.sh "$destination:$remote_dir/"
+          timeout --kill-after=15s 600s sshpass -e scp "${options[@]}" bundle/release.tar.gz bundle/deploy.sh "$destination:$remote_dir/"
           if [[ -n "$ADMIN_PASSWORD_HASH" ]]; then
             printf 'ADMIN_USERNAME=admin\nADMIN_PASSWORD_HASH=%s\n' "$ADMIN_PASSWORD_HASH" | \
               timeout 60s sshpass -e ssh "${options[@]}" "$destination" "umask 077; cat > '$remote_dir/admin.env'"

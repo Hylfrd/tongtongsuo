@@ -344,7 +344,11 @@ async function initialize(): Promise<void> {
   if (adminPath && mobileAdmin()) {
     disposeAmbient?.(); disposeAmbient = undefined;
     document.documentElement.lang = 'zh-CN'; document.title = '正雅苑 · 工具箱管理';
-    app.className = 'admin-desktop-only'; app.innerHTML = '<p>请使用电脑访问</p>'; return;
+    adminMounted = true;
+    app.className = `student-app admin-mobile-notice${new URLSearchParams(location.search).get('mobile') === '1' ? ' phone-preview' : ''}`;
+    app.innerHTML = `<main class="page-shell"><header class="page-tools"><div class="product-context"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></div></header><section class="admin-access-message"><h1>管理端仅支持电脑访问</h1></section></main><footer class="site-footer"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a href="${esc(licenseHref(location.pathname + location.search))}">License</a><a class="github-link" href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="项目源码">${githubIcon}</a></footer>`;
+    disposeAmbient = installAmbient(app);
+    return;
   }
   if (location.pathname === '/license') { disposeAmbient?.(); disposeAmbient = undefined; const {mountLicense} = await import('./license'); mountLicense(app); return; }
   const query = new URLSearchParams(location.search);

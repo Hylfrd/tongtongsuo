@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.database import Database
 
 
-def create_cabinet_router(require_user, db_path: Path | None = None):
+def create_cabinet_router(require_user, db_path: Path | None = None, ttlock=None):
     database = Database(db_path)
     router = APIRouter(prefix="/api/cabinets")
 
@@ -58,8 +58,11 @@ def create_cabinet_router(require_user, db_path: Path | None = None):
     @router.post("/{code}/unlock")
     def unlock(code: str, user=Depends(require_user)):
         with database.transaction() as connection:
-            cabinet(connection, code)
-        # Selection data is not stored as a loan without a confirmed operation.
-        raise HTTPException(503, detail={"code": "HARDWARE_NOT_CONFIGURED", "message": "暂时无法连接柜锁，请稍后再试。"})
+            selected = cabinet(connection, code)
+        if ttlock is None:
+            raise HTTPException(503, detail={"code": "HARDWARE_NOT_CONFIGURED", "message": "通通锁接口尚未配置，请联系管理员。"})
+        # Only the server-owned cabinet mapping selects devices. Client selection
+        # data is not persisted as a loan; lending confirmation remains separate.
+        return ttlock.unlock_cabinet(selected["id"], user)
 
     return router

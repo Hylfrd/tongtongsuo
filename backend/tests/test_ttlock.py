@@ -57,7 +57,7 @@ def test_secrets_remain_encrypted_and_routes_require_admin(tmp_path):
     app = FastAPI()
     app.include_router(create_ttlock_router(denied, instance))
     client = TestClient(app)
-    for method, path in [('GET', 'settings'), ('PUT', 'settings'), ('POST', 'connect'), ('POST', 'sync')]:
+    for method, path in [('GET', 'settings'), ('PUT', 'settings'), ('POST', 'connect'), ('POST', 'sync'), ('GET', 'locks/1/settings'), ('PATCH', 'locks/1/settings')]:
         assert client.request(method, '/api/admin/ttlock/' + path, json={}).status_code == 401
     instance.save_settings({'client_id': 'another-application'})
     assert instance.public()['connected'] is False
@@ -153,3 +153,89 @@ def test_provider_errors_and_validation_never_echo_credentials(tmp_path):
     assert response.status_code == 422
     assert 'private-secret' not in response.text
     assert instance.public()['connected'] is False
+
+def configured_lock(tmp_path, *, fail_setting=None):
+    bits = (4, 15, 22, 23, 28, 29, 30, 36, 43, 46, 51)
+    state = {'lockId': 11, 'lockName': 'factory-name', 'lockAlias': 'A 柜锁', 'lockMac': 'AA:BB',
+             'featureValue': format(sum(1 << bit for bit in bits), 'x'), 'autoLockTime': 5,
+             'lockSound': 1, 'soundVolume': 3, 'openDirection': 1, 'privacyLock': 2,
+             'tamperAlert': 2, 'resetButton': 1, 'modelNum': 'MODEL', 'electricQuantity': 80,
+             'noKeyPwd': 'DO-NOT-EXPOSE', 'lockData': 'DO-NOT-EXPOSE'}
+    passage = {'passageMode': 2, 'autoUnlock': 2, 'cyclicConfig': []}
+    writes = []
+    def handler(request):
+        path = request.url.path
+        if path == '/v3/lock/detail':
+            return httpx.Response(200, json=state)
+        if path == '/v3/lock/getPassageModeConfiguration':
+            return httpx.Response(200, json=passage)
+        if path in {'/v3/lock/setAutoLockTime', '/v3/lock/updateSetting', '/v3/lock/configurePassageMode'}:
+            form = {key: value[0] for key, value in parse_qs(request.content.decode()).items()}
+            writes.append((path, form))
+            if path == '/v3/lock/updateSetting':
+                assert form['changeType'] == '2'
+                setting_type = int(form['type'])
+                if setting_type == fail_setting:
+                    raise httpx.ReadTimeout('private upstream error', request=request)
+                state[{2: 'privacyLock', 3: 'tamperAlert', 4: 'resetButton', 6: 'lockSound', 7: 'openDirection', 8: 'soundVolume'}[setting_type]] = int(form['value'])
+            elif path == '/v3/lock/setAutoLockTime':
+                assert form['type'] == '2'
+                state['autoLockTime'] = int(form['seconds'])
+            else:
+                assert form['type'] == '2'
+                passage.update(passageMode=int(form['passageMode']), autoUnlock=int(form['autoUnlock']), cyclicConfig=json.loads(form['cyclicConfig']))
+            return httpx.Response(200, json={'errcode': 0})
+        return cloud(request)
+    instance = service(tmp_path, handler)
+    instance.connect('cloud-account', 'password')
+    instance.sync()
+    return instance, writes
+
+
+def test_lock_settings_readback_capabilities_and_minimal_hardware_patch(tmp_path):
+    instance, writes = configured_lock(tmp_path)
+    with instance.database.transaction(write=True) as connection:
+        connection.execute("UPDATE gateways SET name='本地备注名' WHERE provider_gateway_id='21'")
+    current = instance.get_lock_settings(1)
+    assert 'DO-NOT-EXPOSE' not in json.dumps(current)
+    assert current['readonly']['gateways'][0]['name'] == '本地备注名'
+    assert current['readonly']['gateways'][0]['cloud_name'] == 'G2'
+    assert current['supported']['door_alarm_seconds'] is True
+    assert current['capabilities']['door_alarm_seconds'] is False
+    assert current['settings']['door_alarm_seconds'] is None
+    with pytest.raises(HTTPException) as unsupported:
+        instance.update_lock_settings(1, {'door_alarm_seconds': 20}, 'Admin')
+    assert unsupported.value.status_code == 409
+    assert writes == []
+    with pytest.raises(HTTPException) as invalid:
+        instance.update_lock_settings(1, {'auto_lock_seconds': True}, 'Admin')
+    assert invalid.value.status_code == 422
+    assert writes == []
+    result = instance.update_lock_settings(1, {'auto_lock_seconds': 10, 'sound_volume': 3,
+              'passage_mode': True, 'passage_schedules': [{'weekdays': [2, 1], 'all_day': False, 'start_minute': 480, 'end_minute': 1080}]}, 'Admin')
+    assert [path for path, _ in writes] == ['/v3/lock/setAutoLockTime', '/v3/lock/configurePassageMode']
+    assert result['settings']['auto_lock_seconds'] == 10
+    assert result['settings']['passage_schedules'][0]['weekdays'] == [1, 2]
+    assert result['message'] == '锁设置已更新。'
+    with instance.database.transaction() as connection:
+        rows = connection.execute('SELECT outcome FROM ttlock_setting_changes').fetchall()
+    assert [row[0] for row in rows] == ['confirmed', 'confirmed']
+
+
+def test_lock_setting_partial_timeout_stops_writes_and_returns_safe_readback(tmp_path):
+    instance, writes = configured_lock(tmp_path, fail_setting=2)
+    with pytest.raises(HTTPException) as failure:
+        instance.update_lock_settings(1, {'auto_lock_seconds': 10, 'privacy_lock': True, 'tamper_alert': True}, 'Admin')
+    detail = failure.value.detail
+    assert failure.value.status_code == 504
+    assert detail['code'] == 'TTLOCK_SETTINGS_PARTIAL'
+    assert detail['acknowledged'] == ['auto_lock_seconds']
+    assert detail['failed'] == ['privacy_lock']
+    assert detail['current']['settings']['auto_lock_seconds'] == 10
+    assert detail['current']['settings']['privacy_lock'] is False
+    assert 'DO-NOT-EXPOSE' not in json.dumps(detail)
+    assert 'private upstream' not in json.dumps(detail)
+    assert len(writes) == 2
+    with instance.database.transaction() as connection:
+        rows = connection.execute('SELECT setting,outcome FROM ttlock_setting_changes ORDER BY id').fetchall()
+    assert [tuple(row) for row in rows] == [('auto_lock_seconds', 'confirmed'), ('privacy_lock', 'unknown')]

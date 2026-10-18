@@ -59,7 +59,7 @@ def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -
     ttlock = TTLockService(db_path)
     application.include_router(create_ttlock_router(auth.require_admin, ttlock))
     application.include_router(create_admin_router(auth.require_admin, db_path, ttlock))
-    application.include_router(create_cabinet_router(auth.require_user, db_path))
+    application.include_router(create_cabinet_router(auth.require_user, db_path, ttlock))
     ai_settings = SettingsStore(db_path)
     application.include_router(create_ai_settings_router(auth.require_admin, ai_settings))
     application.include_router(create_ai_generation_router(auth.require_admin, ai_settings, db_path))

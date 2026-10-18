@@ -109,3 +109,76 @@ def test_app_registers_cabinet_routes_with_real_auth_and_no_store(tmp_path):
     for suffix in ("/tools", "/loans/me"):
         assert client.get("/api/cabinets/A" + suffix).status_code == 401
     assert client.post("/api/cabinets/A/unlock").status_code == 401
+
+def cloud_cabinet_client(tmp_path, *, fail_lock=None):
+    import httpx
+    from urllib.parse import parse_qs
+    from app.ttlock import TTLockService
+    writes = []
+    def handler(request):
+        path = request.url.path
+        if path == '/oauth2/token':
+            return httpx.Response(200, json={'access_token': 'mock-token', 'refresh_token': 'mock-refresh', 'expires_in': 3600})
+        if path == '/v3/lock/list':
+            return httpx.Response(200, json={'list': [{'lockId': id, 'lockAlias': f'Lock {id}', 'featureValue': '500'} for id in (11, 12, 13)], 'pages': 1})
+        if path == '/v3/gateway/list':
+            return httpx.Response(200, json={'list': [], 'pages': 1})
+        if path == '/v3/lock/unlock':
+            provider_id = parse_qs(request.content.decode())['lockId'][0]
+            writes.append(provider_id)
+            if provider_id == fail_lock:
+                raise httpx.ReadTimeout('Mock timeout', request=request)
+            return httpx.Response(200, json={'errcode': 0})
+        raise AssertionError(path)
+    path = tmp_path / 'cloud.sqlite3'
+    service = TTLockService(path, transport=httpx.MockTransport(handler))
+    service.save_settings({'client_id': 'fixture', 'client_secret': 'fixture-secret'})
+    service.connect('fixture-account', 'fixture-password')
+    service.sync()
+    with service.database.transaction(write=True) as connection:
+        ids = {row['code']: row['id'] for row in connection.execute('SELECT id,code FROM cabinets')}
+        connection.execute("UPDATE locks SET cabinet_id=? WHERE provider_lock_id IN ('11','12')", (ids['A'],))
+        connection.execute("UPDATE locks SET cabinet_id=? WHERE provider_lock_id='13'", (ids['B'],))
+    identity = {'name': 'Student', 'school_code': '001'}
+    app = FastAPI()
+    app.include_router(create_cabinet_router(lambda: identity, path, service))
+    return TestClient(app), service, writes, identity
+
+
+def test_assigned_cabinet_unlocks_only_server_selected_locks_without_loans(tmp_path):
+    client, service, writes, identity = cloud_cabinet_client(tmp_path)
+    response = client.post('/api/cabinets/A/unlock', json={'provider_lock_id': '13', 'cabinet_id': 2})
+    assert response.status_code == 200
+    assert response.json()['status'] == 'unlocked'
+    assert response.json()['completed_locks'] == 2
+    assert writes == ['11', '12']
+    with service.database.transaction() as connection:
+        assert connection.execute('SELECT COUNT(*) FROM loans').fetchone()[0] == 0
+        assert connection.execute('SELECT actor FROM ttlock_commands ORDER BY id LIMIT 1').fetchone()[0] == 'Student (001)'
+    identity.update(name='管理员', role='admin', school_code=None)
+    assert client.post('/api/cabinets/B/unlock').status_code == 200
+    assert writes == ['11', '12', '13']
+
+
+def test_cabinet_unlock_preflights_all_locks_and_never_replays_partial_timeout(tmp_path):
+    client, service, writes, _ = cloud_cabinet_client(tmp_path, fail_lock='12')
+    response = client.post('/api/cabinets/A/unlock')
+    assert response.status_code == 504
+    detail = response.json()['detail']
+    assert detail['code'] == 'CABINET_UNLOCK_UNKNOWN'
+    assert detail['completed_locks'] == 1
+    assert detail['total_locks'] == 2
+    assert writes == ['11', '12']
+    with service.database.transaction(write=True) as connection:
+        # Let the first lock's cooldown elapse without sleeping. The second
+        # uncertain command must still block the entire cabinet before a write.
+        connection.execute("UPDATE ttlock_commands SET started_at=0,finished_at='2000-01-01T00:00:00+00:00'")
+    assert client.post('/api/cabinets/A/unlock').status_code == 409
+    assert writes == ['11', '12']
+    with service.database.transaction(write=True) as connection:
+        connection.execute("UPDATE ttlock_devices SET details='{}',available=0 WHERE kind='locks' AND provider_id='13'")
+    assert client.post('/api/cabinets/B/unlock').status_code == 409
+    assert writes == ['11', '12']
+    with service.database.transaction(write=True) as connection:
+        connection.execute("UPDATE locks SET cabinet_id=NULL WHERE cabinet_id=(SELECT id FROM cabinets WHERE code='B')")
+    assert client.post('/api/cabinets/B/unlock').json()['detail']['code'] == 'CABINET_HAS_NO_LOCKS'

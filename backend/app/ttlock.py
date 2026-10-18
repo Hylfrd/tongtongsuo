@@ -6,6 +6,7 @@ import os
 import stat
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -61,6 +62,10 @@ class TTLockService:
                     id INTEGER PRIMARY KEY, lock_id TEXT NOT NULL, action TEXT NOT NULL,
                     actor TEXT NOT NULL, started_at REAL NOT NULL, finished_at TEXT,
                     outcome TEXT NOT NULL, error_code TEXT);
+                CREATE TABLE IF NOT EXISTS ttlock_setting_changes (
+                    id INTEGER PRIMARY KEY, batch_id TEXT NOT NULL, lock_id TEXT NOT NULL,
+                    setting TEXT NOT NULL, requested TEXT NOT NULL, actor TEXT NOT NULL,
+                    started_at TEXT NOT NULL, finished_at TEXT, outcome TEXT NOT NULL, error_code TEXT);
             ''')
 
     def _cipher(self, create=False):
@@ -299,8 +304,15 @@ class TTLockService:
             device = connection.execute('SELECT * FROM ttlock_devices WHERE kind=? AND provider_id=?', (kind, record['provider_id'])).fetchone() if record else None
             if not device:
                 return {'status': 'unknown', 'observed_at': None, 'cloud_available': False, 'cloud_gateways': []}
-            gateways = [dict(row) for row in connection.execute('''SELECT g.id,g.name,g.provider_gateway_id FROM ttlock_links link
-                JOIN gateways g ON g.provider_gateway_id=link.gateway_id WHERE link.lock_id=?''', (record['provider_id'],))] if kind == 'locks' else []
+            gateways = []
+            if kind == 'locks':
+                for row in connection.execute('''SELECT g.id,g.name,g.provider_gateway_id,d.details FROM ttlock_links link
+                    JOIN gateways g ON g.provider_gateway_id=link.gateway_id
+                    LEFT JOIN ttlock_devices d ON d.kind='gateways' AND d.provider_id=link.gateway_id
+                    WHERE link.lock_id=?''', (record['provider_id'],)):
+                    cloud_name = json.loads(row['details'] or '{}').get('gatewayName')
+                    gateways.append({'id': row['id'], 'name': row['name'], 'provider_gateway_id': row['provider_gateway_id'],
+                                     'cloud_name': cloud_name if isinstance(cloud_name, str) else None})
         return {**json.loads(device['details']), 'status': device['status'] if device['available'] else 'unknown',
                 'observed_at': device['observed_at'], 'cloud_available': bool(device['available']), 'cloud_gateways': gateways}
 
@@ -343,7 +355,53 @@ class TTLockService:
         if not bits & (1 << bit):
             fail(409, 'TTLOCK_UNSUPPORTED_ACTION', '该锁未报告远程开锁能力。' if action == 'unlock' else '该锁不支持远程闭锁；请按设备方式关门自动落锁。')
 
-    def lock_action(self, record_id, action, actor):
+    @staticmethod
+    def _command_ready(connection, provider_id):
+        previous = connection.execute('SELECT * FROM ttlock_commands WHERE lock_id=? ORDER BY id DESC LIMIT 1', (provider_id,)).fetchone()
+        if previous and previous['outcome'] in {'pending', 'unknown'}:
+            fail(409, 'COMMAND_RESULT_UNKNOWN', '上一次开关锁结果未知，请先请求锁状态并现场核实。')
+        finished = datetime.fromisoformat(previous['finished_at']).timestamp() if previous and previous['finished_at'] else 0
+        if previous and time.time() - max(previous['started_at'], finished) < 5:
+            fail(409, 'COMMAND_COOLDOWN', '操作过于频繁，请稍后请求状态。')
+
+    def unlock_cabinet(self, cabinet_id, actor):
+        # Hold the same lock across the complete cabinet operation, including
+        # preflight, so another request cannot interleave its physical commands.
+        with self._lock:
+            with self.database.transaction() as connection:
+                records = connection.execute('SELECT id FROM locks WHERE cabinet_id=? ORDER BY id', (cabinet_id,)).fetchall()
+            if not records:
+                fail(409, 'CABINET_HAS_NO_LOCKS', '该柜子尚未分配柜锁，请联系管理员。')
+            for record in records:
+                provider_id = self._device('locks', record['id'])
+                self._check_capability(provider_id, 'unlock')
+                with self.database.transaction() as connection:
+                    self._command_ready(connection, provider_id)
+            actor_name = str(actor.get('name') or '使用人') if isinstance(actor, dict) else str(actor)
+            if isinstance(actor, dict) and actor.get('school_code'):
+                actor_name += ' (' + str(actor['school_code']) + ')'
+            completed = 0
+            last_observed = None
+            for record in records:
+                try:
+                    result = self.lock_action(record['id'], 'unlock', actor_name, _capability_checked=True)
+                except HTTPException as exc:
+                    detail = exc.detail if isinstance(exc.detail, dict) else {}
+                    unknown = detail.get('code') == 'COMMAND_RESULT_UNKNOWN'
+                    if not completed:
+                        raise
+                    raise HTTPException(exc.status_code, detail={
+                        'code': 'CABINET_UNLOCK_UNKNOWN' if unknown else 'CABINET_UNLOCK_PARTIAL',
+                        'message': f'已有 {completed}/{len(records)} 把锁收到成功响应，其余柜锁未能确认打开。请联系管理员核实，系统未自动重发。',
+                        'status': 'unknown' if unknown else 'partial', 'completed_locks': completed,
+                        'total_locks': len(records), 'upstream_code': detail.get('code', 'TTLOCK_ERROR'),
+                    }) from None
+                completed += 1
+                last_observed = result.get('observed_at')
+            return {'status': 'unlocked', 'message': '柜门开锁指令已执行，请现场确认。',
+                    'completed_locks': completed, 'total_locks': len(records), 'observed_at': last_observed}
+
+    def lock_action(self, record_id, action, actor, *, _capability_checked=False):
         if action not in {'unlock', 'lock', 'status'}:
             fail(422, 'INVALID_ACTION', '无效的锁操作。')
         with self._lock:
@@ -356,15 +414,11 @@ class TTLockService:
                 if status != 'unknown':
                     with self.database.transaction(write=True) as connection:
                         connection.execute("UPDATE ttlock_commands SET outcome='state_checked',finished_at=? WHERE lock_id=? AND outcome IN ('pending','unknown')", (observed, provider_id))
-                return {'status': status, 'observed_at': observed, 'message': {'locked': '锁舌已闭合。', 'unlocked': '锁舌已打开。', 'unknown': '当前无法判断锁舌状态。'}[status]}
-            self._check_capability(provider_id, action)
+                return {'status': status, 'observed_at': observed, 'message': '状态请求完成。'}
+            if not _capability_checked:
+                self._check_capability(provider_id, action)
             with self.database.transaction(write=True) as connection:
-                previous = connection.execute('SELECT * FROM ttlock_commands WHERE lock_id=? ORDER BY id DESC LIMIT 1', (provider_id,)).fetchone()
-                if previous and previous['outcome'] in {'pending', 'unknown'}:
-                    fail(409, 'COMMAND_RESULT_UNKNOWN', '上一次开关锁结果未知，请先请求锁状态并现场核实。')
-                finished = datetime.fromisoformat(previous['finished_at']).timestamp() if previous and previous['finished_at'] else 0
-                if previous and time.time() - max(previous['started_at'], finished) < 5:
-                    fail(409, 'COMMAND_COOLDOWN', '操作过于频繁，请稍后请求状态。')
+                self._command_ready(connection, provider_id)
                 actor_name = str(actor.get('name') or actor.get('username') or actor.get('id') or 'admin') if isinstance(actor, dict) else str(actor or 'admin')
                 command_id = connection.execute("INSERT INTO ttlock_commands(lock_id,action,actor,started_at,outcome) VALUES(?,?,?,?,'pending')", (provider_id, action, actor_name[:128], time.time())).lastrowid
             try:
@@ -382,13 +436,219 @@ class TTLockService:
                 connection.execute("UPDATE ttlock_commands SET outcome='succeeded',finished_at=? WHERE id=?", (observed, command_id))
             return {'status': status, 'observed_at': observed, 'message': '开锁指令已执行，请现场确认柜门。' if action == 'unlock' else '闭锁指令已执行，请现场确认柜门。'}
 
+    @staticmethod
+    def _passage_schedules(value, *, incoming=False):
+        code = 'TTLOCK_INVALID_SETTINGS' if incoming else 'TTLOCK_INVALID_RESPONSE'
+        status = 422 if incoming else 502
+        if not isinstance(value, list) or len(value) > 5:
+            fail(status, code, '常开模式最多支持五个时间段。')
+        schedules = []
+        for item in value:
+            required = {'weekdays', 'all_day', 'start_minute', 'end_minute'}
+            if not isinstance(item, dict) or (incoming and set(item) != required):
+                fail(status, code, '常开模式时间段格式无效。')
+            days = item.get('weekdays' if incoming else 'weekDays')
+            all_day = item.get('all_day') if incoming else {1: True, 2: False}.get(item.get('isAllDay'))
+            start = item.get('start_minute' if incoming else 'startTime')
+            end = item.get('end_minute' if incoming else 'endTime')
+            if not isinstance(days, list) or not days or len(days) > 7 or any(type(day) is not int or not 1 <= day <= 7 for day in days) or len(set(days)) != len(days) or type(all_day) is not bool:
+                fail(status, code, '请选择有效且不重复的星期。')
+            if all_day:
+                start, end = 0, 1440
+            if type(start) is not int or type(end) is not int or not 0 <= start < end <= 1440:
+                fail(status, code, '常开时间应在同一天内，结束时间必须晚于开始时间。')
+            schedules.append({'weekdays': sorted(days), 'all_day': all_day, 'start_minute': start, 'end_minute': end})
+        # The upstream sorts schedules when returning them. Compare canonical values.
+        return sorted(schedules, key=lambda item: (item['weekdays'], item['start_minute'], item['end_minute']))
+
+    def _read_lock_settings(self, provider_id):
+        detail = self._api('/v3/lock/detail', {'lockId': provider_id})
+        if 'lockId' in detail and cloud_id(detail['lockId']) != provider_id:
+            fail(502, 'TTLOCK_INVALID_RESPONSE', '通通锁返回了不匹配的设备信息。')
+        try:
+            feature = int(str(detail.get('featureValue')), 16)
+            if feature < 0:
+                feature = 0
+        except (TypeError, ValueError):
+            feature = 0
+        bits = {'auto_lock_seconds': 4, 'passage_mode': 22, 'passage_schedules': 22,
+                'passage_auto_unlock': 46, 'sound_enabled': 15, 'sound_volume': 43,
+                'open_direction': 36, 'privacy_lock': 30, 'tamper_alert': 28,
+                'reset_button': 29, 'door_alarm_seconds': 51, 'auto_lock_disable': 23,
+                'ic_card': 1, 'fingerprint': 2, 'remote_unlock': 10}
+        supported = {key: bool(feature & (1 << bit)) for key, bit in bits.items()}
+        supported['remote_unlock_setting'] = False  # Cloud API does not configure this switch.
+
+        def integer(key, minimum, maximum):
+            value = detail.get(key)
+            return value if type(value) is int and minimum <= value <= maximum else None
+
+        def switch(key):
+            value = detail.get(key)
+            return {1: True, 2: False}.get(value) if type(value) is int else None
+
+        seconds = integer('autoLockTime', -1, 32767)
+        settings = {'auto_lock_seconds': seconds if seconds != 0 else None,
+                    'passage_mode': None, 'passage_auto_unlock': None, 'passage_schedules': None,
+                    'sound_enabled': switch('lockSound'), 'sound_volume': integer('soundVolume', 1, 5),
+                    'open_direction': {1: 'left', 2: 'right'}.get(integer('openDirection', 1, 2)),
+                    'privacy_lock': switch('privacyLock'), 'tamper_alert': switch('tamperAlert'),
+                    'reset_button': switch('resetButton'), 'door_alarm_seconds': None}
+        # The documented detail response has no door-not-closed alarm duration.
+        # Report its hardware capability, but do not invent a value or offer an
+        # edit that cannot be read back. It remains managed in the vendor App.
+        if supported['passage_mode']:
+            passage = self._api('/v3/lock/getPassageModeConfiguration', {'lockId': provider_id})
+            enabled = passage.get('passageMode')
+            if type(enabled) is not int or enabled not in (1, 2):
+                fail(502, 'TTLOCK_INVALID_RESPONSE', '通通锁未返回有效的常开模式状态。')
+            settings['passage_mode'] = enabled == 1
+            settings['passage_schedules'] = self._passage_schedules(passage.get('cyclicConfig'))
+            auto_unlock = passage.get('autoUnlock')
+            settings['passage_auto_unlock'] = {1: True, 2: False}.get(auto_unlock) if type(auto_unlock) is int else None
+        capabilities = {key: supported[key] and value is not None for key, value in settings.items()}
+        capabilities.update({key: supported[key] for key in ('auto_lock_disable', 'ic_card', 'fingerprint', 'remote_unlock', 'remote_unlock_setting')})
+        with self.database.transaction() as connection:
+            gateways = []
+            for row in connection.execute('''SELECT g.provider_gateway_id,g.name,d.details FROM ttlock_links link
+                    JOIN gateways g ON g.provider_gateway_id=link.gateway_id
+                    LEFT JOIN ttlock_devices d ON d.kind='gateways' AND d.provider_id=link.gateway_id
+                    WHERE link.lock_id=? ORDER BY g.id''', (provider_id,)):
+                cloud_name = json.loads(row['details'] or '{}').get('gatewayName')
+                gateways.append({'provider_gateway_id': row['provider_gateway_id'], 'name': row['name'],
+                                 'cloud_name': cloud_name if isinstance(cloud_name, str) else None})
+        def text(key):
+            value = detail.get(key)
+            return value[:250] if isinstance(value, str) else None
+        readonly = {'provider_lock_id': provider_id, 'lock_name': text('lockName'), 'lock_alias': text('lockAlias'),
+                    'lock_mac': text('lockMac'), 'battery': integer('electricQuantity', 0, 100),
+                    'model': text('modelNum'), 'hardware': text('hardwareRevision'), 'firmware': text('firmwareRevision'),
+                    'timezone_offset': integer('timezoneRawOffset', -86400000, 86400000),
+                    'gateways': gateways, 'gateway_names_source': 'last_sync'}
+        return {'settings': settings, 'capabilities': capabilities, 'supported': supported,
+                'readonly': readonly, 'observed_at': now()}
+
+    def get_lock_settings(self, record_id):
+        with self._lock:
+            provider_id = self._device('locks', record_id)
+            return self._read_lock_settings(provider_id)
+
+    @staticmethod
+    def _validate_lock_patch(payload, current):
+        values = current['settings']
+        if not isinstance(payload, dict) or set(payload) - values.keys():
+            fail(422, 'TTLOCK_INVALID_SETTINGS', '包含未知或只读的锁设置项。')
+        changes = {}
+        booleans = {'sound_enabled', 'privacy_lock', 'tamper_alert', 'reset_button', 'passage_mode', 'passage_auto_unlock'}
+        for key, value in payload.items():
+            if not current['capabilities'].get(key):
+                fail(409, 'TTLOCK_UNSUPPORTED_SETTING', '该锁不支持此设置项，或平台未提供可核实的当前值。')
+            if key in booleans and type(value) is not bool:
+                fail(422, 'TTLOCK_INVALID_SETTINGS', '锁开关选项必须为开启或关闭。')
+            if key == 'auto_lock_seconds':
+                if type(value) is not int or not (1 <= value <= 32767 or value == -1):
+                    fail(422, 'TTLOCK_INVALID_SETTINGS', '自动闭锁时间需为 1–32767 秒，或关闭。')
+                if value == -1 and not current['capabilities']['auto_lock_disable']:
+                    fail(409, 'TTLOCK_UNSUPPORTED_SETTING', '该锁不支持关闭自动闭锁。')
+            if key == 'sound_volume' and (type(value) is not int or not 1 <= value <= 5):
+                fail(422, 'TTLOCK_INVALID_SETTINGS', '音量需为 1–5。')
+            if key == 'open_direction' and (not isinstance(value, str) or value not in {'left', 'right'}):
+                fail(422, 'TTLOCK_INVALID_SETTINGS', '请选择左开或右开。')
+            if key == 'passage_schedules':
+                value = TTLockService._passage_schedules(value, incoming=True)
+            if value != values[key]:
+                changes[key] = value
+        merged = {**values, **changes}
+        if any(key.startswith('passage_') for key in changes) and merged['passage_mode'] and not merged['passage_schedules']:
+            fail(422, 'TTLOCK_INVALID_SETTINGS', '开启常开模式前，请至少设置一个时间段。')
+        return changes, merged
+
+    def update_lock_settings(self, record_id, payload, actor):
+        with self._lock:
+            provider_id = self._device('locks', record_id)
+            current = self._read_lock_settings(provider_id)
+            changes, merged = self._validate_lock_patch(payload, current)
+            if not changes:
+                return {**current, 'message': '设置未发生变化。'}
+            operations = []
+            if 'auto_lock_seconds' in changes:
+                operations.append(('auto_lock_seconds', '/v3/lock/setAutoLockTime', {'seconds': changes['auto_lock_seconds'], 'type': 2}, {'auto_lock_seconds'}))
+            setting_types = {'privacy_lock': 2, 'tamper_alert': 3, 'reset_button': 4, 'sound_enabled': 6, 'open_direction': 7, 'sound_volume': 8}
+            for key, setting_type in setting_types.items():
+                if key not in changes:
+                    continue
+                value = changes[key]
+                if type(value) is bool:
+                    value = 1 if value else 2
+                elif key == 'open_direction':
+                    value = {'left': 1, 'right': 2}[value]
+                operations.append((key, '/v3/lock/updateSetting', {'type': setting_type, 'value': value, 'changeType': 2}, {key}))
+            passage_changes = {key for key in changes if key.startswith('passage_')}
+            if passage_changes:
+                config = [{'weekDays': item['weekdays'], 'isAllDay': 1 if item['all_day'] else 2,
+                           'startTime': item['start_minute'], 'endTime': item['end_minute']} for item in merged['passage_schedules']]
+                values = {'type': 2, 'passageMode': 1 if merged['passage_mode'] else 2,
+                          'cyclicConfig': json.dumps(config, separators=(',', ':'))}
+                if current['capabilities']['passage_auto_unlock']:
+                    values['autoUnlock'] = 1 if merged['passage_auto_unlock'] else 2
+                operations.append(('passage', '/v3/lock/configurePassageMode', values, passage_changes))
+            actor_name = str(actor.get('name') or actor.get('username') or actor.get('id') or 'admin') if isinstance(actor, dict) else str(actor or 'admin')
+            batch_id = uuid.uuid4().hex
+            audit_ids, acknowledged, failed = [], [], None
+            for key, path, data, fields in operations:
+                with self.database.transaction(write=True) as connection:
+                    audit_id = connection.execute('''INSERT INTO ttlock_setting_changes
+                        (batch_id,lock_id,setting,requested,actor,started_at,outcome) VALUES(?,?,?,?,?,?,'pending')''',
+                        (batch_id, provider_id, key, json.dumps({field: changes[field] for field in sorted(fields)}), actor_name[:128], now())).lastrowid
+                audit_ids.append((audit_id, fields))
+                try:
+                    self._api(path, {'lockId': provider_id, **data}, command=True)
+                except HTTPException as exc:
+                    code = exc.detail.get('code', 'TTLOCK_ERROR') if isinstance(exc.detail, dict) else 'TTLOCK_ERROR'
+                    uncertain = code == 'COMMAND_RESULT_UNKNOWN'
+                    with self.database.transaction(write=True) as connection:
+                        connection.execute('UPDATE ttlock_setting_changes SET outcome=?,error_code=?,finished_at=? WHERE id=?',
+                                           ('unknown' if uncertain else 'failed', code, now(), audit_id))
+                    reason = exc.detail.get('message', '') if isinstance(exc.detail, dict) else ''
+                    failed = (exc.status_code, code, fields, reason)
+                    break  # Never retry a write, or continue the batch after a failure.
+                acknowledged.extend(sorted(fields))
+                with self.database.transaction(write=True) as connection:
+                    connection.execute("UPDATE ttlock_setting_changes SET outcome='acknowledged',finished_at=? WHERE id=?", (now(), audit_id))
+            refreshed = None
+            try:
+                refreshed = self._read_lock_settings(provider_id)
+            except HTTPException:
+                pass
+            if refreshed:
+                with self.database.transaction(write=True) as connection:
+                    for audit_id, fields in audit_ids:
+                        matches = all(refreshed['settings'].get(field) == changes[field] for field in fields)
+                        connection.execute("UPDATE ttlock_setting_changes SET outcome=? WHERE id=? AND outcome='acknowledged'",
+                                           ('confirmed' if matches else 'unconfirmed', audit_id))
+            if failed:
+                status, code, fields, reason = failed
+                message = '部分设置已发送，但后续设置失败。请核对读回值后再操作。' if acknowledged else '设置未能完成，请核对读回值后再操作。'
+                if code == 'COMMAND_RESULT_UNKNOWN':
+                    message = '部分设置已发送，后续设置结果未知，系统未自动重发。请核对设备配置。' if acknowledged else '设置结果未知，系统未自动重发。请重新读取并核对设备配置。'
+                elif reason:
+                    message += ' ' + reason
+                raise HTTPException(status, detail={'code': 'TTLOCK_SETTINGS_PARTIAL' if acknowledged else 'TTLOCK_SETTINGS_FAILED',
+                                    'message': message, 'upstream_code': code, 'acknowledged': acknowledged,
+                                    'failed': sorted(fields), 'current': refreshed})
+            if refreshed is None or any(refreshed['settings'].get(key) != value for key, value in changes.items()):
+                raise HTTPException(502, detail={'code': 'TTLOCK_SETTINGS_UNCONFIRMED',
+                                    'message': '设置指令已发送，但读回尚未确认全部变更，请重新读取设备配置。',
+                                    'acknowledged': acknowledged, 'current': refreshed})
+            return {**refreshed, 'message': '锁设置已更新。'}
+
     def gateway_status(self, record_id):
         with self._lock:
             provider_id = self._device('gateways', record_id)
             item = self._api('/v3/gateway/detail', {'gatewayId': provider_id})
             status = {0: 'offline', 1: 'online'}.get(item.get('isOnline'), 'unknown')
             observed = self._observe('gateways', provider_id, status)
-            return {'status': status, 'observed_at': observed, 'message': {'online': '平台显示网关在线；状态可能有延迟。', 'offline': '平台显示网关离线；状态可能有延迟。', 'unknown': '平台暂未返回该网关的在线状态。'}[status]}
+            return {'status': status, 'observed_at': observed, 'message': '状态请求完成。'}
 
 
 def create_ttlock_router(require_admin, service: TTLockService):
@@ -415,6 +675,18 @@ def create_ttlock_router(require_admin, service: TTLockService):
         if not isinstance(payload, dict) or set(payload) != {'username', 'password'}:
             fail(422, 'TTLOCK_INVALID_LOGIN', '通通锁登录信息格式无效。')
         return await run_in_threadpool(service.connect, payload['username'], payload['password'])
+
+    @router.get('/locks/{record_id}/settings')
+    def lock_settings(record_id: int):
+        return service.get_lock_settings(record_id)
+
+    @router.patch('/locks/{record_id}/settings')
+    async def update_lock_settings(record_id: int, request: Request, actor=Depends(require_admin)):
+        try:
+            payload = await request.json()
+        except ValueError:
+            fail(422, 'TTLOCK_INVALID_SETTINGS', '锁设置格式无效。')
+        return await run_in_threadpool(service.update_lock_settings, record_id, payload, actor)
 
     @router.post('/sync')
     def sync():

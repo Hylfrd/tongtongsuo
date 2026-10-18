@@ -326,9 +326,10 @@ async function unlock(): Promise<void> {
   opening = true; previewOpened = false; await move('unlock');
   if (preview) { demoTimer = setTimeout(() => { opening = false; previewOpened = true; render(); }, 950); return; }
   try {
-    await request(endpoint('/unlock'), {method:'POST'});
-    // An accepted request alone cannot confirm the physical lock state.
-    showToast(t('unconfirmed'), 'info');
+    const result=await request<{status:string}>(endpoint('/unlock'), {method:'POST',signal:AbortSignal.timeout(180000)});
+    if(!requestScope.isCurrent(version))return;
+    previewOpened=result.status==='unlocked';
+    if(!previewOpened)showToast(t('unconfirmed'), 'info');
   } catch (error) { errorToast(error); }
   finally { if (requestScope.isCurrent(version)) { opening = false; if (view === 'unlock') render(); } }
 }

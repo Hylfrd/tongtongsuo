@@ -79,3 +79,31 @@ def test_frontend_dist_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     client = TestClient(create_app(db_path=tmp_path / "inventory.sqlite3"))
     assert client.get("/").text == "Configured frontend"
     assert client.get("/api/health").json()["version"] == "development"
+
+
+def test_asset_caching_keeps_html_api_and_unversioned_files_fresh(tmp_path: Path) -> None:
+    (tmp_path / "index.html").write_text("Frontend", encoding="utf-8")
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    for name in ("index-BwRNJl_I.js", "fonts-A1b_2C-d.woff2", "app.js", "jsqr-LICENSE.txt", "OFL.txt"):
+        (assets / name).write_bytes(b"fixture asset content")
+    client = TestClient(create_app(tmp_path, db_path=tmp_path / "inventory.sqlite3"))
+    immutable = "public, max-age=31536000, immutable"
+    response = client.get("/assets/index-BwRNJl_I.js")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == immutable
+    assert client.get("/assets/fonts-A1b_2C-d.woff2").headers["cache-control"] == immutable
+    conditional = client.get("/assets/index-BwRNJl_I.js", headers={"If-None-Match": response.headers["etag"]})
+    assert conditional.status_code == 304
+    assert conditional.headers["cache-control"] == immutable
+    partial = client.get("/assets/index-BwRNJl_I.js", headers={"Range": "bytes=0-6"})
+    assert partial.status_code == 206
+    assert partial.headers["cache-control"] == immutable
+    for path in ("/", "/scan/A", "/admin", "/license", "/assets/app.js", "/assets/jsqr-LICENSE.txt", "/assets/OFL.txt"):
+        assert client.get(path).headers["cache-control"] == "no-cache"
+    for path in ("/assets/missing-AbCd1234.js", "/assets/unknown.js", "/unknown"):
+        missing = client.get(path)
+        assert missing.status_code == 404
+        assert missing.headers["cache-control"] == "no-store"
+    for path in ("/api/health", "/api/auth/me", "/api/cabinets/A", "/api/unknown"):
+        assert client.get(path).headers["cache-control"] == "no-store"

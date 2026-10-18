@@ -1,6 +1,7 @@
 """Campus lock entry point; physical lock control remains disabled."""
 
 import os
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -11,6 +12,11 @@ from app.auth import AuthManager
 from app.admin import create_admin_router
 from app.cabinets import create_cabinet_router
 from app.request_limits import AdminBodyLimitMiddleware
+
+
+# Vite's default content fingerprint is eight URL-safe base64 characters.
+# Unversioned public files (licences, etc.) must be revalidated after deployment.
+FINGERPRINTED_ASSET = re.compile(r"^/assets/[^/]+-[A-Za-z0-9_-]{8}\.(?:js|css|png|jpe?g|webp|avif|svg|ico|woff2?|ttf)$")
 
 
 def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -> FastAPI:
@@ -51,8 +57,15 @@ def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -
     @application.middleware("http")
     async def private_api_responses(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith("/api/"):
+        path = request.url.path
+        if path.startswith("/api/") or response.status_code >= 400:
             response.headers["Cache-Control"] = "no-store"
+        elif path.startswith("/assets/"):
+            response.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable"
+                if response.status_code in (200, 206, 304) and FINGERPRINTED_ASSET.fullmatch(path)
+                else "no-cache"
+            )
         response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 

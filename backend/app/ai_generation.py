@@ -263,11 +263,11 @@ class IconJobs:
             self.update(job_id, stage="generating", prompt=prompt)
             result = await post_json(settings, "images/generations", {
                 "model": settings["image_model"], "prompt": prompt, "n": 1,
-                "size": settings["image_size"], "quality": settings["image_quality"],
+                "quality": settings["image_quality"],
                 "background": settings["image_background"], "output_format": "png",
             }, max_response_bytes=MAX_ENCODED_IMAGE + 1024 * 1024)
             self.update(job_id, stage="processing")
-            icon, metadata = await asyncio.to_thread(_normalize_image, result, settings["image_size"])
+            icon, metadata = await asyncio.to_thread(_normalize_image, result, "auto")
             del result
             metadata.update({"image_model": settings["image_model"], "provider": settings["provider"],
                              "review_enabled": bool(settings["review_enabled"])})
@@ -336,7 +336,7 @@ def create_ai_generation_router(require_admin, store, db_path: Path) -> APIRoute
                 response.status_code = 200
                 return {"mode": "dry_run", "prompt": _prompt(settings, body),
                         "parameters": {key: settings[key] for key in (
-                            "provider", "base_url", "image_model", "image_size", "image_quality", "image_background",
+                            "provider", "base_url", "image_model", "image_quality", "image_background",
                             "rewrite_enabled", "rewrite_model", "rewrite_effort", "review_enabled", "review_model", "review_effort",
                         )}}
             finally:

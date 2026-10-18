@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator, model_validator
 
 from app.ai_transport import validate_base_url
 from app.database import Database
@@ -38,7 +38,6 @@ class AIConfig(BaseModel):
     provider: Literal['sub2api', 'custom'] = 'sub2api'
     base_url: Annotated[str, Field(max_length=500)] = 'https://sub2api.tk2.xiaoqingtech.org/v1'
     image_model: Annotated[str, Field(min_length=1, max_length=100, pattern=r'^[A-Za-z0-9._:-]+$')] = 'gpt-image-2.5-sunburst'
-    image_size: Literal['1024x1024', '1536x1024', '1024x1536', '2048x2048'] = '1024x1024'
     image_quality: Literal['low', 'medium', 'high', 'xhigh', 'max', 'auto'] = 'high'
     image_background: Literal['transparent', 'opaque', 'auto'] = 'transparent'
     timeout_seconds: Annotated[int, Field(ge=30, le=900, strict=True)] = 600
@@ -49,6 +48,14 @@ class AIConfig(BaseModel):
     review_enabled: bool = True
     review_model: Model = 'gpt-6.1-sol'
     review_effort: Effort = 'xhigh'
+
+    @model_validator(mode='before')
+    @classmethod
+    def remove_legacy_size(cls, value):
+        # Existing encrypted settings remain readable; the provider chooses output size.
+        if isinstance(value, dict):
+            return {key: item for key, item in value.items() if key != 'image_size'}
+        return value
 
     @field_validator('base_url')
     @classmethod

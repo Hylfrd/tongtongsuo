@@ -60,7 +60,7 @@ def test_built_frontend_only_serves_known_entry_points(tmp_path: Path) -> None:
     (assets / "app.js").write_text("export {};", encoding="utf-8")
     client = TestClient(create_app(tmp_path, db_path=tmp_path / "inventory.sqlite3"))
 
-    for path in ("/", "/m", "/admin", "/scan/A", "/scan/B", "/scan/new-cabinet", "/m/scan/A", "/m/scan/new-cabinet"):
+    for path in ("/", "/m", "/admin", "/license", "/license?from=%2Fm%2Fscan%2FA", "/scan/A", "/scan/B", "/scan/new-cabinet", "/m/scan/A", "/m/scan/new-cabinet"):
         response = client.get(path)
         assert response.status_code == 200
         assert response.text == page

@@ -92,6 +92,7 @@ def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -
     @application.get("/", include_in_schema=False)
     @application.get("/m", include_in_schema=False)
     @application.get("/admin", include_in_schema=False)
+    @application.get("/license", include_in_schema=False)
     def frontend_root() -> FileResponse:
         return frontend_index()
 

@@ -253,3 +253,12 @@
 .adm-field :is(input,select,textarea):focus,.adm-filter :is(input,select,textarea):focus { outline:none; box-shadow:none; border-color:#087c9c; }
 .adm-field :is(input,select,textarea)[aria-invalid="true"],.adm-filter :is(input,select,textarea)[aria-invalid="true"] { border-color:#bd473d; background:#fff3f1; }
 .adm-field :is(input,select,textarea)[aria-invalid="true"]:focus,.adm-filter :is(input,select,textarea)[aria-invalid="true"]:focus { border-color:#a82f25; background:#fff3f1; }
+
+.adm-settings { max-width:720px; }
+.adm-setting-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 0; border-top:1px solid var(--adm-line); border-bottom:1px solid var(--adm-line); }
+.adm-setting-row h2 { font-size:16px; font-weight:600; }
+@media(max-width:720px) {
+  .adm-nav { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .adm-nav button { font-size:11px; }
+}
+@media(max-width:480px) { .adm-nav button svg { display:none; } }

@@ -12,7 +12,7 @@ type Lock = { id: number; code: string; name: string; provider_lock_id: string |
 type Tool = { id: number; cabinet_id: number; name: string; name_en: string; description: string; description_en: string; unit: string; unit_en: string; notes: string; quantity: number; icon: string; icon_data: string | null; available_quantity: number; borrowed_quantity: number; borrowers: {name: string; school_code: string | null; quantity: number; borrowed_at: string}[] };
 type Loan = { id: number; user_name: string; school_code: string | null; cabinet_id: number; cabinet_name: string; cabinet_code: string; tool_id: number; tool_name: string; quantity: number; borrowed_at: string; returned_at: string | null; days: number };
 type Overview = { cabinet_count: number; lock_count: number; gateway_count: number; tool_count: number; active_loan_count: number; hardware_configured: boolean };
-type View = 'overview' | 'devices' | 'tools' | 'loans';
+type View = 'overview' | 'devices' | 'tools' | 'loans' | 'other';
 type Resource = 'cabinets' | 'locks' | 'gateways' | 'tools';
 const escape = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]!));
 const formatDate = (value: string | null): string => value ? new Date(value).toLocaleString('zh-CN', {hour12: false}) : '—';
@@ -21,14 +21,14 @@ const toolIcons: Record<string, {label: string; icon: IconName}> = {screwdriver:
 
 export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogout: () => Promise<void>): Promise<void> {
   const section = new URLSearchParams(location.search).get('section');
-  let view: View = section === 'devices' || section === 'tools' || section === 'loans' ? section : 'overview';
+  let view: View = section === 'devices' || section === 'tools' || section === 'loans' || section === 'other' ? section : 'overview';
   let cabinets: Cabinet[] = [], locks: Lock[] = [], gateways: Gateway[] = [], tools: Tool[] = [], loans: Loan[] = [];
   let overview: Overview | null = null;
   let toolCabinet = '', deviceTab: 'cabinets' | 'locks' | 'gateways' = 'cabinets';
   let loaded = false, forbidden = false, loanRequest = 0;
   let passwordChangePending = false;
   let filters = {q:'', cabinet_id:'', status:'all', sort:'borrowed_at', direction:'desc'};
-  const titles: Record<View, string> = {overview:'概览',devices:'柜子与设备',tools:'工具管理',loans:'借还记录'};
+  const titles: Record<View, string> = {overview:'概览',devices:'柜子与设备',tools:'工具管理',loans:'借还记录',other:'其他'};
 
   async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await fetch(url, {signal:AbortSignal.timeout(15000), ...init, credentials:'same-origin', cache:'no-store', headers:{...(init?.body ? {'Content-Type':'application/json'} : {}), ...init?.headers}});
@@ -79,6 +79,9 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   function navigate(next: View): void {
     if (view === next) return;
     view = next;
+    const url = new URL(location.href);
+    url.searchParams.set('section',view);
+    history.replaceState(null,'',url);
     shell('#admin-page-title', true);
     window.scrollTo({top:0,behavior:'instant'});
     if (view === 'loans') void loadLoans();
@@ -102,15 +105,15 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       }
       return;
     }
-    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand" href="/"><img src="${mascot}" alt="正雅苑小狼"><span>正雅苑<small>共享工具箱</small></span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock']] as [View,string,IconName][]).map(([key,label,symbol])=>`<button data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span>${view===key?'<i></i>':''}</button>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-password">${icon('key')}<span>修改密码</span></button><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-icon-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="adm-license" href="${escape(licenseHref(`/admin?section=${view}`))}">License</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
+    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand" href="/"><img src="${mascot}" alt="正雅苑小狼"><span>正雅苑<small>共享工具箱</small></span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<button data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span>${view===key?'<i></i>':''}</button>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-icon-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><span>正雅苑 · 共享工具箱</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="adm-license" href="${escape(licenseHref(`/admin?section=${view}`))}">License</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
     root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.view as View)));
-    root.querySelector('#admin-password')?.addEventListener('click',changePassword);
     root.querySelector('#admin-logout')?.addEventListener('click',()=>void onLogout().catch(fail));
     root.querySelector('#admin-refresh')?.addEventListener('click',()=>void refresh());
     bindContent();
     restoreFocus(focusSelector);
   }
   function content(): string {
+    if(view==='other') return `<section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section>`;
     if(view==='overview') {
       const stats = overview!;
       return `<section class="adm-stats" aria-label="当前管理概况"><div><strong>${stats.cabinet_count}</strong><span>共享柜子</span></div><div><strong>${stats.tool_count}</strong><span>工具种类</span></div><div><strong>${stats.active_loan_count}</strong><span>未归还记录</span></div><div><strong>${stats.lock_count}<small> / ${stats.gateway_count}</small></strong><span>锁 / 网关</span></div></section><div class="adm-section-heading"><h2>柜子一览</h2><button class="adm-text" data-add="cabinets">添加柜子 ${icon('arrow')}</button></div>${cabinetCards()}`;
@@ -151,6 +154,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     form.addEventListener('change',clear);
   }
   function bindContent(): void {
+    root.querySelector('#admin-password')?.addEventListener('click',changePassword);
     root.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button=>button.addEventListener('click',()=>navigate(button.dataset.go as View)));
     root.querySelectorAll<HTMLButtonElement>('[data-device-tab]').forEach(button=>button.addEventListener('click',()=>{deviceTab=button.dataset.deviceTab as 'cabinets'|'locks'|'gateways';shell(`[data-device-tab="${deviceTab}"]`, true);}));
     root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach(button=>button.addEventListener('click',()=>edit(button.dataset.add as Resource)));

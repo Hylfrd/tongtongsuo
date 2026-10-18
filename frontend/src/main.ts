@@ -5,6 +5,7 @@ import screwdriver from './assets/screwdriver.png';
 import toolbox from './assets/toolbox.png';
 import { icon, githubIcon, type IconName } from './icons';
 import { showToast } from './toast';
+import { validateForm, clearFieldError } from './validation';
 import { messages, type Language } from './i18n';
 import { shouldOpenAdmin } from './routing';
 import { RequestScope, StaleRequestError } from './request-scope';
@@ -73,8 +74,16 @@ function errorToast(error: unknown): void { if (!(error instanceof StaleRequestE
 function wolf(): string {
   return `<span class="wolf" aria-hidden="true"><img src="${mascot}" alt="" decoding="async"></span>`;
 }
+function cabinetLabel(): string {
+  if (!cabinet) return '';
+  const standard = ['A', 'B'].includes(cabinet.code) && cabinet.name === `${cabinet.code}区`;
+  return standard ? localized(cabinet.name, `Area ${cabinet.code}`) : `${cabinet.name}${cabinet.name === cabinet.code ? '' : ` · ${cabinet.code}`}`;
+}
+function headerActions(): string {
+  return `<div class="header-actions"><button class="text-button language-button" data-action="language" aria-label="${language === 'zh' ? 'Switch to English' : '切换为中文'}">${language === 'zh' ? 'EN' : '中文'}</button>${user ? `<button class="text-button" data-action="logout" ${busy ? 'disabled' : ''}>${icon('logout')}<span>${t('logout')}</span></button>` : ''}</div>`;
+}
 function illustration(): string {
-  return `<div class="login-illustration" aria-hidden="true"><div class="illustration-title"><span>${t('hall')}</span><strong>${t('title')}</strong></div><div class="illustration-stage"><img class="scene-flower" src="${flower}" alt=""><div class="scene-wolf">${wolf()}</div><img class="scene-toolbox" src="${toolbox}" alt=""><img class="scene-screwdriver" src="${screwdriver}" alt=""></div></div>`;
+  return `<div class="login-illustration">${cabinet ? `<span class="illustration-cabinet">${esc(cabinetLabel())}</span>` : ''}<div class="illustration-title"><span>${t('hall')}</span><strong>${t('title')}</strong></div><div class="illustration-stage" aria-hidden="true"><img class="scene-flower" src="${flower}" alt=""><div class="scene-wolf">${wolf()}</div><img class="scene-toolbox" src="${toolbox}" alt=""><img class="scene-screwdriver" src="${screwdriver}" alt=""></div></div>`;
 }
 function toolArt(tool: {icon: string; icon_data: string | null}): string {
   const symbols: Record<string, IconName> = { tape: 'tape', hammer: 'hammer', pliers: 'pliers', toolbox: 'toolbox' };
@@ -82,10 +91,10 @@ function toolArt(tool: {icon: string; icon_data: string | null}): string {
 }
 function heading(title: string): string { return `<div class="workspace-heading"><button class="back-button" data-action="home" aria-label="${t('back')}">${icon('back')}</button><h1 tabindex="-1">${esc(title)}</h1></div>`; }
 function loginContent(): string {
-  return `<section class="login-layout">${illustration()}<div class="login-panel"><span class="panel-symbol" aria-hidden="true">${icon('toolbox')}</span><h1 tabindex="-1">${t('login')}</h1><p class="login-hint">${t('loginHint')}</p>${!preview ? `<form id="login-form" method="post"><fieldset ${busy ? 'disabled' : ''}><div class="field"><label for="username">${t('username')}</label><div class="input-wrap">${icon('user')}<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="${t('accountHint')}" required></div></div><div class="field"><label for="password">${t('password')}</label><div class="input-wrap">${icon('key')}<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" placeholder="${t('passwordHint')}" required></div></div><button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
+  return `<section class="login-layout">${illustration()}<div class="login-panel">${headerActions()}<span class="panel-symbol" aria-hidden="true">${icon('toolbox')}</span><h1 tabindex="-1">${t('login')}</h1><p class="login-hint">${t('loginHint')}</p>${!preview ? `<form id="login-form" method="post" novalidate><fieldset ${busy ? 'disabled' : ''}><div class="field"><label for="username">${t('username')}</label><div class="input-wrap">${icon('user')}<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="${t('accountHint')}" required></div></div><div class="field"><label for="password">${t('password')}</label><div class="input-wrap">${icon('key')}<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" placeholder="${t('passwordHint')}" required></div></div><button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
 }
 function scanContent(): string {
-  return `<section class="login-layout">${illustration()}<div class="scan-panel"><h1 tabindex="-1">${cabinetError ? t('invalidCabinet') : t('scan')}</h1><p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button>${cabinetError ? `<button class="text-button" data-action="retry-init">${t('retry')}</button>` : ''}</div></section>`;
+  return `<section class="login-layout">${illustration()}<div class="scan-panel">${headerActions()}<h1 tabindex="-1" class="${cabinetError ? 'is-error' : ''}">${cabinetError ? t('invalidCabinet') : t('scan')}</h1><p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button>${cabinetError ? `<button class="text-button" data-action="retry-init">${t('retry')}</button>` : ''}</div></section>`;
 }
 function homeContent(): string {
   return `<section class="home-layout"><h1 tabindex="-1">${t('welcome')}<span>${esc(user?.name)}</span></h1><div class="choice-layout"><button class="choice-card choice-borrow" data-action="borrow"><span class="choice-label">${t('borrow')} ${icon('arrow')}</span><span class="choice-art"><img src="${toolbox}" alt=""></span></button><button class="choice-card choice-return" data-action="return"><span class="choice-label">${t('return')} ${icon('arrow')}</span><span class="choice-art"><img src="${mascot}" alt=""></span></button></div></section>`;
@@ -124,13 +133,21 @@ function render(): void {
   if (!app.querySelector('.page-shell')) {
     app.innerHTML = `<main class="page-shell"><div class="page-tools"></div><div class="preview-slot"></div><div class="page-content"></div></main><footer class="site-footer"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="github-link" href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer">${githubIcon}</a></footer>`;
   }
-  const defaultName = cabinet && ['A','B'].includes(cabinet.code) && cabinet.name === `${cabinet.code}区`;
-  const label = cabinet ? (defaultName ? localized(cabinet.name, `Area ${cabinet.code}`) : cabinet.name) : '';
-  app.querySelector('.page-tools')!.innerHTML = `<div class="cabinet-context">${cabinet ? `<span>${esc(label)}</span>${!defaultName && cabinet.code !== cabinet.name ? `<span class="cabinet-code">${t('cabinet')} ${esc(cabinet.code)}</span>` : ''}` : ''}</div><div class="header-actions"><button class="text-button language-button" data-action="language" aria-label="${language === 'zh' ? 'Switch to English' : '切换为中文'}">${language === 'zh' ? 'EN' : '中文'}</button>${user ? `<button class="text-button" data-action="logout" ${busy ? 'disabled' : ''}>${icon('logout')}<span>${t('logout')}</span></button>` : ''}</div>`;
+  const showHeader = !['loading', 'login', 'scan'].includes(view);
+  const pageTools = app.querySelector<HTMLElement>('.page-tools')!;
+  pageTools.hidden = !showHeader;
+  pageTools.innerHTML = showHeader ? `<div class="product-context"><span>${t('hall')} · ${t('title')}</span>${cabinet ? `<strong>${esc(cabinetLabel())}</strong>` : ''}</div>${headerActions()}` : '';
   app.querySelector('.preview-slot')!.innerHTML = preview ? `<p class="preview-note">${t('preview')}</p>` : '';
   app.querySelector('.page-content')!.innerHTML = content;
   app.querySelector('.github-link')!.setAttribute('aria-label', t('source'));
-  document.querySelector('#login-form')?.addEventListener('submit', event => void login(event));
+  const loginForm = document.querySelector<HTMLFormElement>('#login-form');
+  loginForm?.addEventListener('submit', event => void login(event));
+  loginForm?.addEventListener('input', event => { if (event.target instanceof HTMLInputElement) clearFieldError(event.target); });
+  for (const kind of ['copy', 'cut', 'paste', 'drop', 'dragstart']) loginForm?.addEventListener(kind, event => {
+    if (!(event.target instanceof HTMLInputElement)) return;
+    event.preventDefault();
+    if (kind === 'paste' || kind === 'drop') showToast(language === 'zh' ? '请手动输入账号和密码。' : 'Please type your account and password.', 'info');
+  });
   updateSelection(); updateLoginButton();
 }
 async function move(next: View): Promise<void> {
@@ -140,7 +157,7 @@ async function move(next: View): Promise<void> {
   const panel = app.querySelector<HTMLElement>('.page-content');
   panel?.getAnimations().forEach(animation => animation.cancel());
   if (changed && panel && !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    panel.animate([{opacity:.7,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}], {duration:220,easing:'cubic-bezier(.16,1,.3,1)'});
+    panel.animate([{opacity:.7,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}], {duration:360,easing:'cubic-bezier(.16,1,.3,1)'});
   }
   document.querySelector<HTMLElement>('h1')?.focus({preventScroll:true});
 }
@@ -168,6 +185,7 @@ async function login(event: Event): Promise<void> {
   if (busy || preview || Date.now() < loginBlockedUntil) return;
   const username = document.querySelector<HTMLInputElement>('#username')!;
   const password = document.querySelector<HTMLInputElement>('#password')!;
+  if (!validateForm(event.currentTarget as HTMLFormElement)) return;
   invalidateRequests();
   const ticket = requestScope.begin();
   setBusy(true);
@@ -321,6 +339,7 @@ async function initialize(): Promise<void> {
     }
     ticket.check();
     if (user) await enterAccount(); else move(adminPath || cabinet ? 'login' : 'scan');
+    if (adminPath && !user && new URLSearchParams(location.search).get('passwordChanged') === '1') { showToast(t('passwordChanged'), 'success'); history.replaceState(null,'',location.pathname); }
     if (new URLSearchParams(location.search).has('signedOut')) { showToast(t('loggedOut'), 'success'); history.replaceState(null,'',location.pathname); }
   } catch (error) { errorToast(error); }
   finally { ticket.release(); }

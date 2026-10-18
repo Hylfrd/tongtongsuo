@@ -1,0 +1,21 @@
+{
+  "asset": "mascot-original.jpeg",
+  "kind": "unaltered official residence artwork extracted from supplied presentation",
+  "source": "正雅苑/26茶话会/迎新茶话会final.pptx",
+  "slide": 1,
+  "shape_id": "2",
+  "relationship_id": "rId4",
+  "slide_xml": "ppt/slides/slide1.xml",
+  "relationship_xml": "ppt/slides/_rels/slide1.xml.rels",
+  "embedded_path": "ppt/media/image2.jpeg",
+  "width": 2560,
+  "height": 2560,
+  "mode": "RGB",
+  "has_alpha": false,
+  "ppt_transparency_effect": false,
+  "ppt_crop": false,
+  "sha256": "714fa2b120f6dfe233b397163083d7e28345ad0f81b8b6cee35ce4ebc681e83f",
+  "processing": "Extracted embedded JPEG bytes verbatim; no redraw, cropping, background removal, resizing or re-encoding.",
+  "review": "Viewed the extracted image: both ear tips and the original ground shadow are complete. White background is part of the source JPEG.",
+  "rights": "Residence artwork supplied by project maintainer; original rights retained."
+}

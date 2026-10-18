@@ -4,7 +4,7 @@ import { showToast } from './toast';
 import { licenseHref } from './license-navigation';
 import { validateForm, clearFieldError, markFieldError } from './validation';
 import { createAISettings, attachIconGenerator } from './ai-settings';
-import { createMemberSettings, mountMembers } from './member-settings';
+import { createMembersPanel } from './member-settings';
 import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
 import { icon, githubIcon, type IconName } from './icons';
@@ -15,7 +15,7 @@ type Lock = { id: number; code: string; name: string; provider_lock_id: string |
 type Tool = { id: number; cabinet_id: number; name: string; name_en: string; description: string; description_en: string; unit: string; unit_en: string; notes: string; quantity: number; icon: string; icon_data: string | null; available_quantity: number; borrowed_quantity: number; borrowers: {name: string; school_code: string | null; quantity: number; borrowed_at: string}[] };
 type Loan = { id: number; user_name: string; school_code: string | null; cabinet_id: number; cabinet_name: string; cabinet_code: string; tool_id: number; tool_name: string; quantity: number; borrowed_at: string; returned_at: string | null; days: number };
 type Overview = { cabinet_count: number; lock_count: number; gateway_count: number; tool_count: number; active_loan_count: number; hardware_configured: boolean; user_count?: number | null; average_borrow_ratio?: number | null; borrow_visit_count?: number | null; borrow_visits_per_day?: number | null; today_borrow_count?: number | null; today_return_count?: number | null };
-type View = 'overview' | 'devices' | 'tools' | 'loans' | 'other';
+type View = 'overview' | 'devices' | 'tools' | 'loans' | 'members' | 'other';
 type Resource = 'cabinets' | 'locks' | 'gateways' | 'tools';
 const closeIcon = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
 const escape = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]!));
@@ -27,7 +27,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   let disposeBackground: (() => void) | undefined;
   window.addEventListener('pagehide', () => disposeBackground?.(), {once:true});
   const section = new URLSearchParams(location.search).get('section');
-  let view: View = section === 'devices' || section === 'tools' || section === 'loans' || section === 'other' ? section : 'overview';
+  let view: View = section === 'devices' || section === 'tools' || section === 'loans' || section === 'members' || section === 'other' ? section : 'overview';
   let cabinets: Cabinet[] = [], locks: Lock[] = [], gateways: Gateway[] = [], tools: Tool[] = [], loans: Loan[] = [];
   let overview: Overview | null = null;
   let toolCabinet = '', toolSearch = '', toolCabinetInitialized = false;
@@ -43,15 +43,15 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     direction:view === 'loans' && initialFilters.get('direction') === 'asc' ? 'asc' : 'desc',
     school_code:view === 'loans' ? (initialFilters.get('school_code') ?? '').slice(0,128) : '',
   };
-  const titles: Record<View, string> = {overview:'概览',devices:'柜子与设备',tools:'工具管理',loans:'借还记录',other:'其他'};
+  const titles: Record<View, string> = {overview:'概览',devices:'柜子与设备',tools:'工具管理',loans:'借还记录',members:'成员管理',other:'其他'};
   const aiSettings = createAISettings(request);
-  const memberSettings = createMemberSettings(request);
-  window.addEventListener('pagehide',()=>{aiSettings.dispose();memberSettings.dispose();},{once:true});
+  const memberPanel = createMembersPanel(request);
+  window.addEventListener('pagehide',()=>{aiSettings.dispose();memberPanel.dispose();},{once:true});
 
   async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await fetch(url, {signal:AbortSignal.timeout(15000), ...init, credentials:'same-origin', cache:'no-store', headers:{...(init?.body ? {'Content-Type':'application/json'} : {}), ...init?.headers}});
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) { forbidden = true; aiSettings.dispose(); memberSettings.dispose(); }
+      if (response.status === 401 || response.status === 403) { forbidden = true; aiSettings.dispose(); memberPanel.dispose(); }
       let message = response.status === 401 ? '登录已过期，请重新登录。' : response.status === 403 ? '当前账号没有管理权限。' : `请求未完成（${response.status}），请稍后重试。`;
       try { const body = await response.json(); if (typeof body.detail === 'string') message = body.detail; else if (body.detail && typeof body.detail.message === 'string') message = body.detail.message; else if (Array.isArray(body.detail)) message = '填写内容不符合要求，请检查字段长度、格式和数量。'; } catch { /* Keep a useful message for proxy errors. */ }
       throw new Error(message);
@@ -96,6 +96,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   }
   function navigate(next: View): void {
     if (view === next) return;
+    if (view === 'members') memberPanel.leave();
     view = next;
     const url = new URL(location.href);
     url.search = view === 'loans' ? `section=loans&${loanQuery()}` : `section=${view}`;
@@ -125,7 +126,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       return;
     }
     disposeBackground?.();
-    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand product-context" href="/"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<a class="adm-nav-link" href="/admin?section=${key}" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span></a>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-refresh-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="adm-license" href="${escape(licenseHref(`/admin?section=${view}`))}">License</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
+    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand product-context" href="/"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['members','成员管理','user'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<a class="adm-nav-link" href="/admin?section=${key}" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span></a>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-refresh-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="adm-license" href="${escape(licenseHref(`/admin?section=${view}`))}">License</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
     disposeBackground = installAmbient(root.querySelector<HTMLElement>('.admin-shell')!);
     root.querySelectorAll<HTMLAnchorElement>('[data-view]').forEach(link=>link.addEventListener('click',event=>{
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -138,7 +139,8 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     restoreFocus(focusSelector);
   }
   function content(): string {
-    if(view==='other') return `<div id="admin-member-settings"></div><div id="admin-ai-settings"></div><section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section>`;
+    if(view==='members') return '<div id="admin-members-panel"></div>';
+    if(view==='other') return `<div id="admin-ai-settings"></div><section class="adm-settings" aria-label="账号设置"><div class="adm-setting-row"><h2>管理员密码</h2><button class="adm-outline" id="admin-password">${icon('key')}修改密码</button></div></section>`;
     if(view==='overview') {
       const stats = overview!;
       const value = (number: number | null | undefined): number => typeof number === 'number' && Number.isFinite(number) ? Math.max(0,number) : 0;
@@ -188,8 +190,8 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     form.addEventListener('change',clear);
   }
   function bindContent(): void {
-    const memberTarget = root.querySelector('#admin-member-settings');
-    if(memberTarget)memberSettings.mount(memberTarget);
+    const memberTarget = root.querySelector('#admin-members-panel');
+    if(memberTarget)memberPanel.mount(memberTarget);
     const aiTarget = root.querySelector('#admin-ai-settings');
     if(aiTarget)aiSettings.mount(aiTarget);
     root.querySelector('#admin-password')?.addEventListener('click',changePassword);
@@ -227,6 +229,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
   async function refresh(focusSelector = captureFocus()): Promise<void> {
     const button=root.querySelector<HTMLButtonElement>('#admin-refresh');if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
     try {
+      if (view === 'members' && loaded) { await memberPanel.refresh(); return; }
       const [a,b,c,d,e]=await Promise.all([request<Overview>('/api/admin/overview'),request<{items:Cabinet[]}>('/api/admin/cabinets'),request<{items:Lock[]}>('/api/admin/locks'),request<{items:Gateway[]}>('/api/admin/gateways'),request<{items:Tool[]}>('/api/admin/tools')]);
       overview=a;cabinets=b.items;locks=c.items;gateways=d.items;tools=e.items;
       if ((!toolCabinetInitialized && cabinets.length) || (toolCabinet && !cabinets.some(cabinet=>String(cabinet.id)===toolCabinet))) {
@@ -379,6 +382,5 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       }catch(error){if(forbidden){dialog.close();fail(error);}else showToast(errorMessage(error),'error');}finally{submit.disabled=false;}
     });dialog.showModal();
   }
-  if (section === 'members') { await mountMembers(root,request); return; }
   shell();await refresh();
 }

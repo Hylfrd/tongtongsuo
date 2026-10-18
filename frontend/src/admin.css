@@ -236,11 +236,11 @@
 .adm-account-actions { display:flex; align-self:stretch; flex-shrink:0; }
 .adm-password-dialog { width:min(440px,calc(100% - 32px)); }
 .adm-password-fields { display:grid; gap:16px; }
-@media (max-width:1100px) {
-  .adm-sidebar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 16px; padding:14px 24px 0; }
-  .adm-brand { grid-column:1/-1; }
-  .adm-nav { grid-column:1; margin-left:0; }
-  .adm-account-actions { grid-column:2; }
+@media (max-width:1120px) {
+  .adm-sidebar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 16px; padding:0 24px; }
+  .adm-brand { grid-column:1; grid-row:1; }
+  .adm-nav { grid-column:1/-1; grid-row:2; margin-left:0; justify-content:space-between; }
+  .adm-account-actions { grid-column:2; grid-row:1; }
   .adm-nav .adm-nav-link,.adm-account-actions .adm-logout { min-height:48px; padding-inline:12px; }
 }
 

@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 secrets/
+*.ai-key
 
 # Local API responses, logs, and temporary files
 runtime/

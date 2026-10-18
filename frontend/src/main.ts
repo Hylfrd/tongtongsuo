@@ -121,8 +121,8 @@ function borrowContent(): string {
   const rows = [...tools].sort((a,b) => Number(a.available_quantity < 1) - Number(b.available_quantity < 1)).map(tool => {
     const name = localized(tool.name, tool.name_en), unit = localized(tool.unit, tool.unit_en);
     const description = localized(tool.description, tool.description_en);
-    const unavailable = tool.available_quantity < 1, quantity = unavailable ? 0 : quantities.get(tool.id) ?? 1;
-    return `<div class="tool-row${selected.has(tool.id) ? ' is-selected' : ''}${unavailable ? ' is-unavailable' : ''}" data-row="${tool.id}"><label class="tool-select"><input type="checkbox" class="tool-checkbox" value="${tool.id}" ${selected.has(tool.id) ? 'checked' : ''} ${unavailable ? 'disabled' : ''}><span class="check-mark" aria-hidden="true">${icon('check')}</span><span class="tool-art">${toolArt(tool)}</span><span class="tool-info"><strong>${esc(name)}</strong>${description ? `<span class="tool-description">${esc(description)}</span>` : ''}<span>${t('available')} ${tool.available_quantity} ${esc(unit)}</span></span></label><div class="quantity-control"><button data-action="decrease" data-id="${tool.id}" aria-label="${esc(name)}: ${t('decrease')}" ${unavailable || quantity <= 1 ? 'disabled' : ''}>−</button><input type="number" inputmode="numeric" min="1" max="${tool.available_quantity}" value="${quantity}" data-quantity="${tool.id}" aria-label="${esc(name)}: ${t('quantity')}" ${unavailable ? 'disabled' : ''}><button data-action="increase" data-id="${tool.id}" aria-label="${esc(name)}: ${t('increase')}" ${unavailable || quantity >= tool.available_quantity ? 'disabled' : ''}>+</button></div><span class="tool-unit">${esc(unit)}</span></div>`;
+    const unavailable = tool.available_quantity < 1, quantity = unavailable ? 0 : quantities.get(tool.id) ?? 0;
+    return `<div class="tool-row${selected.has(tool.id) ? ' is-selected' : ''}${unavailable ? ' is-unavailable' : ''}" data-row="${tool.id}"><label class="tool-select"><input type="checkbox" class="tool-checkbox" value="${tool.id}" ${selected.has(tool.id) ? 'checked' : ''} ${unavailable ? 'disabled' : ''}><span class="check-mark" aria-hidden="true">${icon('check')}</span><span class="tool-art">${toolArt(tool)}</span><span class="tool-info"><strong>${esc(name)}</strong>${description ? `<span class="tool-description">${esc(description)}</span>` : ''}<span>${t('available')} ${tool.available_quantity} ${esc(unit)}</span></span></label><div class="quantity-control"><button data-action="decrease" data-id="${tool.id}" aria-label="${esc(name)}: ${t('decrease')}" ${unavailable || quantity <= 0 ? 'disabled' : ''}>−</button><input type="number" inputmode="numeric" min="0" max="${tool.available_quantity}" value="${quantity}" data-quantity="${tool.id}" aria-label="${esc(name)}: ${t('quantity')}" ${unavailable ? 'disabled' : ''}><button data-action="increase" data-id="${tool.id}" aria-label="${esc(name)}: ${t('increase')}" ${unavailable || quantity >= tool.available_quantity ? 'disabled' : ''}>+</button></div><span class="tool-unit">${esc(unit)}</span></div>`;
   }).join('');
   return `<section class="workspace">${heading(t('choose'))}<div class="list-scroll">${listLoading ? empty(t('loading')) : listError ? `<div class="empty-state"><button class="secondary-button" data-action="borrow">${t('retry')}</button></div>` : rows ? `<div class="tool-list">${rows}</div>` : empty(t('emptyTools'))}</div>${dock()}</section>`;
 }
@@ -298,10 +298,14 @@ function finish(): void {
 }
 function setQuantity(id: number, raw: number): void {
   const tool = tools.find(item=>item.id===id); if (!tool || tool.available_quantity < 1) return;
-  const value = Math.min(tool.available_quantity, Math.max(1, Number.isFinite(raw) ? Math.trunc(raw) : 1));
-  quantities.set(id,value); if (selected.has(id)) selected.set(id,value);
+  const value = Math.min(tool.available_quantity, Math.max(0, Number.isFinite(raw) ? Math.trunc(raw) : 0));
+  quantities.set(id,value);
+  if (value > 0) selected.set(id,value); else selected.delete(id);
+  const row = app.querySelector<HTMLElement>(`[data-row="${id}"]`);
+  row?.classList.toggle('is-selected', value > 0);
+  const checkbox = row?.querySelector<HTMLInputElement>('.tool-checkbox'); if (checkbox) checkbox.checked = value > 0;
   const input = app.querySelector<HTMLInputElement>(`[data-quantity="${id}"]`); if (input) input.value = String(value);
-  const minus = app.querySelector<HTMLButtonElement>(`[data-action="decrease"][data-id="${id}"]`); if (minus) minus.disabled = value <= 1;
+  const minus = app.querySelector<HTMLButtonElement>(`[data-action="decrease"][data-id="${id}"]`); if (minus) minus.disabled = value <= 0;
   const plus = app.querySelector<HTMLButtonElement>(`[data-action="increase"][data-id="${id}"]`); if (plus) plus.disabled = value >= tool.available_quantity;
   updateSelection();
 }
@@ -316,7 +320,8 @@ app.addEventListener('change', event => {
   if (input.dataset.quantity) { setQuantity(Number(input.dataset.quantity), input.valueAsNumber); return; }
   if (!input.matches('.tool-checkbox')) return;
   const id = Number(input.value);
-  if (input.checked) selected.set(id, mode === 'borrow' ? quantities.get(id) ?? 1 : loans.find(loan=>loan.id===id)?.quantity ?? 1); else selected.delete(id);
+  if (mode === 'borrow') { setQuantity(id, input.checked ? 1 : 0); return; }
+  if (input.checked) selected.set(id, loans.find(loan=>loan.id===id)?.quantity ?? 1); else selected.delete(id);
   input.closest('[data-row]')?.classList.toggle('is-selected', input.checked); updateSelection();
 });
 app.addEventListener('click', event => {
@@ -338,7 +343,7 @@ app.addEventListener('click', event => {
   else if (action === 'borrow' || action === 'return') void loadList(action);
   else if (action === 'unlock' || action === 'reopen') void unlock();
   else if (action === 'finish') finish();
-  else if (action === 'increase' || action === 'decrease') { const id = Number(button.dataset.id); setQuantity(id, (quantities.get(id) ?? 1) + (action === 'increase' ? 1 : -1)); }
+  else if (action === 'increase' || action === 'decrease') { const id = Number(button.dataset.id); setQuantity(id, (quantities.get(id) ?? 0) + (action === 'increase' ? 1 : -1)); }
 });
 async function initialize(): Promise<void> {
   if (adminPath && mobileAdmin()) {

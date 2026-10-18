@@ -31,7 +31,7 @@ let tools: Tool[] = [], loans: Loan[] = [];
 let selected = new Map<number, number>(), quantities = new Map<number, number>();
 let disposeAmbient: (() => void) | undefined;
 let busy = false, opening = false, previewOpened = false, adminMounted = false;
-let cabinetError = false, listError = false, listLoading = false;
+let listError = false, listLoading = false;
 let loginBlockedUntil = 0;
 let cooldownTimer: ReturnType<typeof setInterval> | undefined;
 let demoTimer: ReturnType<typeof setTimeout> | undefined;
@@ -107,7 +107,7 @@ function loginContent(): string {
   return `<section class="login-layout">${illustration()}<div class="login-panel"><div class="panel-heading"><h1 tabindex="-1">${t('login')}</h1>${languageButton()}</div><p class="login-hint">${t('loginHint')}</p>${!preview ? `<form id="login-form" method="post" novalidate><fieldset ${busy ? 'disabled' : ''}><div class="field"><label for="username">${t('username')}</label><div class="input-wrap">${icon('user')}<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="${t('accountHint')}" required></div></div><div class="field"><label for="password">${t('password')}</label><div class="input-wrap">${icon('key')}<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" placeholder="${t('passwordHint')}" required></div></div><button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
 }
 function scanContent(): string {
-  return `<section class="login-layout">${illustration()}<div class="scan-panel"><div class="panel-heading"><h1 tabindex="-1" class="${cabinetError ? 'is-error' : ''}">${cabinetError ? t('invalidCabinet') : t('scan')}</h1>${languageButton()}</div>${logoutButton()}<p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button>${cabinetError ? `<button class="text-button" data-action="retry-init">${t('retry')}</button>` : ''}</div></section>`;
+  return `<section class="login-layout">${illustration()}<div class="scan-panel"><div class="panel-heading"><h1 tabindex="-1">${t('scan')}</h1>${languageButton()}</div>${logoutButton()}<p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button></div></section>`;
 }
 function homeContent(): string {
   return `<section class="home-layout"><h1 tabindex="-1">${t('welcome')}<span>${esc(user?.name)}</span></h1><div class="choice-layout"><button class="choice-card choice-borrow" data-action="borrow"><span class="choice-label">${t('borrow')} ${icon('arrow')}</span><span class="choice-art"><img src="${toolbox}" alt=""></span></button><button class="choice-card choice-return" data-action="return"><span class="choice-label">${t('return')} ${icon('arrow')}</span><span class="choice-art"><img src="${mascot}" alt=""></span></button></div></section>`;
@@ -337,7 +337,6 @@ app.addEventListener('click', event => {
   else if (action === 'borrow' || action === 'return') void loadList(action);
   else if (action === 'unlock' || action === 'reopen') void unlock();
   else if (action === 'finish') finish();
-  else if (action === 'retry-init') void initialize();
   else if (action === 'increase' || action === 'decrease') { const id = Number(button.dataset.id); setQuantity(id, (quantities.get(id) ?? 1) + (action === 'increase' ? 1 : -1)); }
 });
 async function initialize(): Promise<void> {
@@ -350,11 +349,11 @@ async function initialize(): Promise<void> {
   if (query.has('resume')) language = query.get('lang') === 'en' ? 'en' : 'zh';
   invalidateRequests();
   const ticket = requestScope.begin();
-  view = 'loading'; cabinetError = false; cabinet = null; render();
+  view = 'loading'; cabinet = null; render();
   try {
     try {
       if (cabinetCode) { const result = await request<Cabinet>(endpoint()); ticket.check(); cabinet = result; }
-    } catch (error) { ticket.check(); cabinetError = true; errorToast(error); }
+    } catch (error) { ticket.check(); errorToast(error); }
     if (!preview) {
       try {
         const response = await fetch('/api/auth/me', {credentials:'same-origin',cache:'no-store',signal:AbortSignal.any([ticket.signal,AbortSignal.timeout(8000)])});

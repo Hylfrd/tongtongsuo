@@ -6,7 +6,7 @@ export const messages = {
     internationalNameHint: '如果你是外国人，请输入包含空格的完整大写姓名。',
     rosterAuthFailed: '姓名、学号或宿舍号未通过验证，请重试。', loginModeFailed: '无法加载登录方式，请重试。', typeLoginDetails: '请手动输入登录信息。',
     loginHint: '使用 BNBU 账号登录', startScan: '扫描柜子二维码', hall: '正雅苑', title: '共享工具箱', login: '登录', username: '登录账号', password: '密码', accountHint: '输入账号', passwordHint: '请输入密码',
-    checking: '正在验证…', loading: '正在加载…', logout: '退出登录', loggedOut: '已退出登录', passwordChanged: '密码已修改，请重新登录。', admin: '管理入口', scan: '扫码选择柜子', scanDetail: '扫码后选择借用或归还工具。', invalidCabinet: '未找到该柜子，请重新扫码。',
+    checking: '正在验证…', loading: '正在加载…', logout: '退出登录', loggedOut: '已退出登录', passwordChanged: '密码已修改，请重新登录。', admin: '管理员入口', scan: '扫码选择柜子', scanDetail: '扫码后选择借用或归还工具。', invalidCabinet: '未找到该柜子，请重新扫码。',
     cabinet: '柜号', welcome: '欢迎，', borrow: '借用工具', return: '归还工具', choose: '选择工具', home: '返回首页', back: '返回', available: '剩余', emptyTools: '暂无工具', emptyLoans: '暂无借用记录', borrowedAt: '借用时间', selected: '已选', items: '件', quantity: '数量', decrease: '减少数量', increase: '增加数量',
     unlock: '开锁', opening: '正在开锁', unconfirmed: '未确认开锁', opened: '已开锁', within: '请在', seconds: '秒内开柜', autoLock: '关门自动落锁', finish: '完成', reopen: '重新打开柜门', retry: '重试',
     network: '网络连接失败，请稍后重试。', expired: '登录已过期，请重新登录。', authFailed: '账号或密码未通过验证，请重试。', cooldown: '稍后重试', second: '秒', failed: '请求失败，请重试。', hardware: '暂时无法连接柜锁，请稍后再试。', logoutFailed: '暂时无法确认退出，请重试。',

@@ -92,6 +92,9 @@ function languageButton(): string {
 function logoutButton(): string {
   return user ? `<button class="text-button logout-button" data-action="logout" ${busy ? 'disabled' : ''}>${icon('logout')}<span>${t('logout')}</span></button>` : '';
 }
+function adminEntry(placement: 'header' | 'welcome'): string {
+  return user?.role === 'admin' ? `<a class="text-button admin-entry admin-entry-${placement}" href="/admin">${icon('key')}<span>${t('admin')}</span></a>` : '';
+}
 function licenseSource(): string {
   const url = new URL(location.href);
   url.searchParams.delete('signedOut'); url.searchParams.delete('passwordChanged');
@@ -137,7 +140,7 @@ function scanContent(): string {
   return `<section class="login-layout">${illustration()}<div class="scan-panel"><div class="panel-heading"><h1 tabindex="-1">${t('scan')}</h1>${languageButton()}</div>${logoutButton()}<p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button></div></section>`;
 }
 function homeContent(): string {
-  return `<section class="home-layout"><h1 tabindex="-1">${t('welcome')}<span>${esc(user?.name)}</span></h1><div class="choice-layout"><button class="choice-card choice-borrow" data-action="borrow"><span class="choice-label">${t('borrow')} ${icon('arrow')}</span><span class="choice-art"><img src="${toolbox}" alt=""></span></button><button class="choice-card choice-return" data-action="return"><span class="choice-label">${t('return')} ${icon('arrow')}</span><span class="choice-art"><img src="${mascot}" alt=""></span></button></div></section>`;
+  return `<section class="home-layout"><div class="home-heading"><h1 tabindex="-1">${t('welcome')}<span>${esc(user?.name)}</span></h1>${adminEntry('welcome')}</div><div class="choice-layout"><button class="choice-card choice-borrow" data-action="borrow"><span class="choice-label">${t('borrow')} ${icon('arrow')}</span><span class="choice-art"><img src="${toolbox}" alt=""></span></button><button class="choice-card choice-return" data-action="return"><span class="choice-label">${t('return')} ${icon('arrow')}</span><span class="choice-art"><img src="${mascot}" alt=""></span></button></div></section>`;
 }
 function dock(): string {
   return `<div class="action-dock"><strong id="selection-count"></strong><button class="primary-button" id="unlock-button" data-action="unlock">${icon('lock')} ${t('unlock')}</button></div>`;
@@ -178,7 +181,7 @@ function render(): void {
   const showHeader = !['loading', 'login', 'scan'].includes(view);
   const pageTools = app.querySelector<HTMLElement>('.page-tools')!;
   pageTools.hidden = !showHeader;
-  pageTools.innerHTML = showHeader ? `<div class="session-identity"><div class="product-context"><span class="product-hall">${t('hall')}</span><span class="product-name">${t('title')}</span></div><div class="session-controls">${cabinet ? `<strong class="session-cabinet">${esc(cabinetLabel())}</strong>` : ''}</div></div><div class="session-actions">${languageButton()}${logoutButton()}</div>` : '';
+  pageTools.innerHTML = showHeader ? `<div class="session-identity"><div class="product-context"><span class="product-hall">${t('hall')}</span><span class="product-name">${t('title')}</span></div><div class="session-controls">${cabinet ? `<strong class="session-cabinet">${esc(cabinetLabel())}</strong>` : ''}</div></div><div class="session-actions">${adminEntry('header')}${languageButton()}${logoutButton()}</div>` : '';
   app.querySelector('.preview-slot')!.innerHTML = preview ? `<p class="preview-note">${t('preview')}</p>` : '';
   app.querySelector('.page-content')!.innerHTML = content;
   app.querySelector('.github-link')!.setAttribute('aria-label', t('source'));

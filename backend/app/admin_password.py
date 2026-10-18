@@ -9,8 +9,8 @@ ITERATIONS = 600_000
 
 
 def create_password_hash(password: str) -> str:
-    if not 12 <= len(password) <= 256:
-        raise ValueError("Administrator password must contain 12 to 256 characters")
+    if not 5 <= len(password) <= 256:
+        raise ValueError("Administrator password must contain 5 to 256 characters")
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, ITERATIONS)
     return f"pbkdf2_sha256${ITERATIONS}${salt.hex()}${digest.hex()}"
@@ -39,7 +39,7 @@ def verify_password(password: str, parsed: tuple[bytes, bytes]) -> bool:
 
 
 if __name__ == "__main__":
-    password = getpass.getpass("Administrator password (12+ characters): ")
+    password = getpass.getpass("Administrator password (5+ characters): ")
     if password != getpass.getpass("Repeat password: "):
         raise SystemExit("Passwords do not match")
     try:

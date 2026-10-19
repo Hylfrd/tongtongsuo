@@ -10,7 +10,7 @@ export function safeReturnPath(value: string | null): string {
     if (url.pathname !== rawPath || /[\\\p{Cc}\p{Cf}\p{Cs}]/u.test(decoded)) return '/';
     // Controls remain unsafe even when encoded in query or fragment values.
     if (/[\\\p{Cc}\p{Cf}\p{Cs}]/u.test(decodeURIComponent(url.search + url.hash))) return '/';
-    if (['/', '/m', '/m/', '/admin'].includes(decoded)) return rawPath + url.search + url.hash;
+    if (['/', '/m', '/m/', '/admin', '/contact'].includes(decoded)) return rawPath + url.search + url.hash;
     const match = decoded.match(/^\/(?:m\/)?scan\/([^/]+)\/?$/u);
     if (!match || match[1].length > 64 || ['.', '..'].includes(match[1]) || /[%?#]/.test(match[1])) return '/';
     return rawPath + url.search + url.hash;
@@ -21,4 +21,11 @@ export function safeReturnPath(value: string | null): string {
 
 export function licenseHref(from: string): string {
   return `/license?${new URLSearchParams({ from: safeReturnPath(from) })}`;
+}
+
+export function contactHref(from: string, language: 'zh' | 'en' = 'zh'): string {
+  let path = safeReturnPath(from);
+  const url = new URL(path, 'https://toolbox.invalid');
+  if (url.pathname === '/contact') path = safeReturnPath(url.searchParams.get('from'));
+  return `/contact?${new URLSearchParams({ from: path, lang: language })}`;
 }

@@ -4,12 +4,12 @@ import mascot from './assets/mascot-original.jpeg';
 import flower from './assets/flower.png';
 import screwdriver from './assets/screwdriver.png';
 import toolbox from './assets/toolbox.png';
-import { icon, githubIcon, type IconName } from './icons';
+import { icon, type IconName } from './icons';
 import { showToast } from './toast';
 import { validateForm, clearFieldError } from './validation';
 import { messages, type Language } from './i18n';
 import { shouldOpenAdmin } from './routing';
-import { licenseHref } from './license-navigation';
+import { installRescan, siteFooter, updateSiteFooter } from './site-footer';
 import { RequestScope, StaleRequestError } from './request-scope';
 
 type Identity = { name: string; school_code: string | null; role?: 'admin' };
@@ -190,7 +190,7 @@ function render(): void {
   const content = view === 'loading' ? empty(t('loading')) : view === 'scan' ? scanContent() : view === 'login' ? loginContent() : view === 'home' ? homeContent() : view === 'borrow' ? borrowContent() : view === 'return' ? returnContent() : view === 'unlock' ? unlockContent() : `<section class="scan-panel">${wolf()}<h1 tabindex="-1">${t('demoDone')}</h1><p>${t('previewOnly')}</p><button class="primary-button" data-action="home">${t('home')}</button></section>`;
   if (!app.querySelector('.page-shell')) {
     disposeAmbient?.();
-    app.innerHTML = `<main class="page-shell"><div class="page-tools"></div><div class="preview-slot"></div><div class="page-content"></div></main><footer class="site-footer"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="license-link" href="${esc(licenseHref(licenseSource()))}">License</a><a class="github-link" href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer">${githubIcon}</a></footer>`;
+    app.innerHTML = `<main class="page-shell"><div class="page-tools"></div><div class="preview-slot"></div><div class="page-content"></div></main>${siteFooter(licenseSource(), language)}`;
     disposeAmbient = installAmbient(app);
   }
   const showHeader = !['loading', 'login', 'scan'].includes(view);
@@ -199,8 +199,9 @@ function render(): void {
   pageTools.innerHTML = showHeader ? `<div class="session-identity"><div class="product-context"><span class="product-hall">${t('hall')}</span><span class="product-name">${t('title')}</span></div><div class="session-controls">${cabinet ? `<strong class="session-cabinet">${esc(cabinetLabel())}</strong>` : ''}</div></div><div class="session-actions">${adminEntry('header')}${languageButton()}${logoutButton()}</div>` : '';
   app.querySelector('.preview-slot')!.innerHTML = preview ? `<p class="preview-note">${t('preview')}</p>` : '';
   app.querySelector('.page-content')!.innerHTML = content;
-  app.querySelector('.github-link')!.setAttribute('aria-label', t('source'));
-  app.querySelector('.license-link')!.setAttribute('href', licenseHref(licenseSource()));
+  updateSiteFooter(app, licenseSource(), language);
+  const rescan = app.querySelector<HTMLButtonElement>('[data-rescan]');
+  if (rescan) rescan.disabled = busy || opening;
   const loginForm = document.querySelector<HTMLFormElement>('#login-form');
   loginForm?.addEventListener('submit', event => void login(event));
   loginForm?.addEventListener('input', event => {
@@ -238,7 +239,7 @@ function setBusy(value: boolean): void {
   busy = value;
   const fields = document.querySelector<HTMLFieldSetElement>('#login-form fieldset');
   if (fields) fields.disabled = value;
-  document.querySelectorAll<HTMLButtonElement>('.language-button,.logout-button').forEach(button => button.disabled = value);
+  document.querySelectorAll<HTMLButtonElement>('.language-button,.logout-button,[data-rescan]').forEach(button => button.disabled = value);
   updateLoginButton(); updateSelection();
 }
 function updateLoginButton(): void {
@@ -419,11 +420,12 @@ async function initialize(): Promise<void> {
     document.documentElement.lang = 'zh-CN'; document.title = '正雅苑 · 工具箱管理';
     adminMounted = true;
     app.className = `student-app admin-mobile-notice${new URLSearchParams(location.search).get('mobile') === '1' ? ' phone-preview' : ''}`;
-    app.innerHTML = `<main class="page-shell"><header class="page-tools"><div class="product-context"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></div></header><section class="admin-access-message"><h1>管理端仅支持电脑访问</h1></section></main><footer class="site-footer"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a href="${esc(licenseHref(location.pathname + location.search))}">License</a><a class="github-link" href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="项目源码">${githubIcon}</a></footer>`;
+    app.innerHTML = `<main class="page-shell"><header class="page-tools"><div class="product-context"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></div></header><section class="admin-access-message"><h1>管理端仅支持电脑访问</h1></section></main>${siteFooter(location.pathname + location.search)}`;
     disposeAmbient = installAmbient(app);
     return;
   }
   if (location.pathname === '/license') { disposeAmbient?.(); disposeAmbient = undefined; const {mountLicense} = await import('./license'); mountLicense(app); return; }
+  if (location.pathname === '/contact') { disposeAmbient?.(); disposeAmbient = undefined; const {mountContact} = await import('./contact'); mountContact(app); return; }
   const query = new URLSearchParams(location.search);
   if (query.has('resume')) language = query.get('lang') === 'en' ? 'en' : 'zh';
   invalidateRequests();
@@ -459,4 +461,5 @@ window.addEventListener('pageshow', event => {
   void initialize();
 });
 window.addEventListener('pagehide', () => { invalidateRequests(); document.querySelectorAll<HTMLInputElement>('#login-form input[type="password"]').forEach(input=>{input.value='';}); clearTimeout(demoTimer); clearInterval(cooldownTimer); });
+installRescan(app, () => !busy && !opening);
 void initialize();

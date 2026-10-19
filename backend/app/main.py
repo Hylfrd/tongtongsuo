@@ -25,7 +25,7 @@ FINGERPRINTED_ASSET = re.compile(r"^/assets/[^/]+-[A-Za-z0-9_-]{8}\.(?:js|css|pn
 
 def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -> FastAPI:
     application = FastAPI(
-        title="Tongtongsuo",
+        title="Zhengya Shared Toolbox",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -116,6 +116,7 @@ def create_app(frontend_dist: Path | None = None, db_path: Path | None = None) -
     @application.get("/m", include_in_schema=False)
     @application.get("/admin", include_in_schema=False)
     @application.get("/license", include_in_schema=False)
+    @application.get("/contact", include_in_schema=False)
     def frontend_root() -> FileResponse:
         return frontend_index()
 

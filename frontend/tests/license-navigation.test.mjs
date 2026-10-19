@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { licenseHref, safeReturnPath } from '../src/license-navigation.ts';
 
 test('license returns to local cabinet, mobile and admin context', () => {
-  for (const path of ['/', '/m', '/m/', '/admin?section=tools', '/scan/A', '/scan/new-cabinet_2027', '/m/scan/B', '/scan/%E6%96%B0%E6%9F%9C?resume=borrow&lang=en#selection', '/scan/A?resume=borrow&lang=en']) {
+  for (const path of ['/', '/m', '/m/', '/admin?section=tools', '/contact?from=%2Fscan%2FA&lang=en', '/scan/A', '/scan/new-cabinet_2027', '/m/scan/B', '/scan/%E6%96%B0%E6%9F%9C?resume=borrow&lang=en#selection', '/scan/A?resume=borrow&lang=en']) {
     assert.equal(safeReturnPath(path), path);
     const destination = new URL(licenseHref(path), 'https://toolbox.invalid');
     assert.equal(destination.pathname, '/license');

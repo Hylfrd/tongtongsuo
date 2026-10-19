@@ -2,6 +2,7 @@ import './license.css';
 import englishLicense from '../../LICENSE?raw';
 import { icon } from './icons';
 import { safeReturnPath } from './license-navigation';
+import { rescanButton } from './site-footer';
 
 export function mountLicense(root: HTMLElement): void {
   const from = safeReturnPath(new URLSearchParams(location.search).get('from'));
@@ -12,7 +13,7 @@ export function mountLicense(root: HTMLElement): void {
     <main class="license-page">
       <header class="license-header">
         <p class="license-brand">正雅苑 <span>· 共享工具箱</span></p>
-        <a class="license-return" data-license-return>${icon('back')}<span>返回</span></a>
+        <div class="license-header-actions">${rescanButton()}<a class="license-return" data-license-return>${icon('back')}<span>返回</span></a></div>
       </header>
       <article class="license-paper" aria-labelledby="license-title">
         <div class="license-heading"><h1 id="license-title">开源许可</h1><p>AGPL-3.0 · GNU Affero 通用公共许可证</p></div>

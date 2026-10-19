@@ -1,0 +1,10 @@
+.site-footer > .footer-links,.adm-footer > .footer-links { display:flex; width:100%; flex-wrap:wrap; justify-content:center; align-items:center; gap:4px clamp(7px,1.6vw,18px); }
+.footer-links > a { display:inline-flex; align-items:center; min-height:28px; white-space:nowrap; }
+.rescan-button { display:inline-grid; place-items:center; flex-shrink:0; width:32px; height:32px; padding:6px; border:1px solid #b5cfd6; border-radius:8px; background:#ffffffb8; color:#316777; transition:background 350ms var(--ease),border-color 350ms var(--ease),color 350ms var(--ease); }
+.rescan-button .icon { width:18px; height:18px; }
+.rescan-button:hover:not(:disabled) { color:#00697d; border-color:#65a1af; background:#e2f2f5; }
+.rescan-button:focus-visible { outline:3px solid #07839a; outline-offset:3px; }
+.license-header-actions { display:flex; align-items:center; gap:12px; }
+.license-header-actions .rescan-button { width:40px; height:40px; }
+@media (max-width:360px) { .site-footer > .footer-links { column-gap:7px; } }
+@media (prefers-reduced-motion:reduce) { .rescan-button { transition:none; } }

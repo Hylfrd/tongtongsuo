@@ -1,7 +1,7 @@
 import './admin.css';
 import { installAmbient } from './ambient';
 import { showToast } from './toast';
-import { licenseHref } from './license-navigation';
+import { siteFooter, updateSiteFooter } from './site-footer';
 import { validateForm, clearFieldError, markFieldError } from './validation';
 import { createAISettings, attachIconGenerator } from './ai-settings';
 import { createMembersPanel } from './member-settings';
@@ -12,7 +12,7 @@ import { createGatewayEditor } from './gateway-editor';
 import { openDeviceOnboarding } from './device-onboarding';
 import mascot from './assets/mascot-original.jpeg';
 import screwdriver from './assets/screwdriver.png';
-import { icon, githubIcon, type IconName } from './icons';
+import { icon, type IconName } from './icons';
 
 type Cabinet = { id: number; code: string; name: string; group_name: string; location: string; notes: string; lock_count: number; tool_count: number };
 type DeviceState = { status: string; observed_at?: string | null; cloud_available?: boolean; electric_quantity?: number | null; cloud_gateways?: {provider_gateway_id: string; name: string; cloud_name?: string}[] };
@@ -141,7 +141,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     const currentContent = root.querySelector<HTMLElement>('#admin-content');
     if (currentContent) {
       root.querySelector('#admin-page-title')!.textContent = titles[view];
-      root.querySelector('.adm-license')?.setAttribute('href', licenseHref(`/admin?section=${view}`));
+      updateSiteFooter(root, location.pathname + location.search);
       root.querySelectorAll<HTMLAnchorElement>('[data-view]').forEach(button=>{
         if (button.dataset.view === view) button.setAttribute('aria-current','page');
         else button.removeAttribute('aria-current');
@@ -158,7 +158,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       return;
     }
     disposeBackground?.();
-    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand product-context" href="/"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['members','成员管理','user'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<a class="adm-nav-link" href="/admin?section=${key}" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span></a>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-refresh-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main><footer class="adm-footer"><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="adm-license" href="${escape(licenseHref(`/admin?section=${view}`))}">License</a><a href="https://github.com/Hylfrd/tongtongsuo" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目">${githubIcon}</a></div></footer></div></div>`;
+    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand product-context" href="/"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['members','成员管理','user'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<a class="adm-nav-link" href="/admin?section=${key}" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span></a>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-refresh-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main>${siteFooter(location.pathname + location.search, 'zh', true)}</div></div>`;
     disposeBackground = installAmbient(root.querySelector<HTMLElement>('.admin-shell')!);
     root.querySelectorAll<HTMLAnchorElement>('[data-view]').forEach(link=>link.addEventListener('click',event=>{
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -212,7 +212,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     const url = new URL(location.href);
     url.search = `section=loans&${loanQuery()}`;
     history.replaceState(null,'',url);
-    root.querySelector('.adm-license')?.setAttribute('href',licenseHref(url.pathname+url.search));
+    updateSiteFooter(root, url.pathname + url.search);
     const target=root.querySelector<HTMLElement>('#admin-loan-result');
     if(target) target.setAttribute('aria-busy','true');
     try {const result=await request<{items:Loan[]}>(`/api/admin/loans?${loanQuery()}`); if(version!==loanRequest || view!=='loans')return; loans=result.items; const current=root.querySelector('#admin-loan-result'); if(current){current.innerHTML=loanTable();current.removeAttribute('aria-busy');} const count=root.querySelector('#admin-loan-count'); if(count) count.textContent=`${loans.length} 条`;}

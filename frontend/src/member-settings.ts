@@ -1,6 +1,6 @@
 import './member-settings.css';
 import { showToast } from './toast';
-import { licenseHref } from './license-navigation';
+import { updateSiteFooter } from './site-footer';
 
 type Mode = 'sso' | 'roster';
 type Request = <T>(url: string, init?: RequestInit) => Promise<T>;
@@ -57,7 +57,8 @@ export function createMembersPanel(request: Request) {
     const url = new URL(location.href);
     url.search = new URLSearchParams({section:'members',source,...(query ? {q:query} : {}),...(page > 1 ? {page:String(page)} : {})}).toString();
     history.replaceState(null,'',url);
-    element.closest('.admin-shell')?.querySelector('.adm-license')?.setAttribute('href',licenseHref(url.pathname+url.search));
+    const shell = element.closest('.admin-shell');
+    if (shell) updateSiteFooter(shell, url.pathname + url.search);
   }
   function date(value: string | null): string { return value ? new Date(value).toLocaleString('zh-CN', {hour12:false}) : '—'; }
   function loanLink(member: Member): string {

@@ -30,7 +30,7 @@ export function mountContact(root: HTMLElement): void {
           <div><dt>${text.wechat}</dt><dd>Hylfrd</dd></div>
           <div><dt>${text.phone}</dt><dd><a href="tel:+8618123705397">+86 18123705397</a></dd></div>
           <div><dt>${text.email}</dt><dd><a href="mailto:Hylfrd@outlook.com">Hylfrd@outlook.com</a></dd></div>
-          <div><dt>${text.school}</dt><dd><a href="mailto:v530024107@outlook.com">v530024107@outlook.com</a></dd></div>
+          <div><dt>${text.school}</dt><dd><a href="mailto:v530024107@mail.bnbu.edu.cn">v530024107@mail.bnbu.edu.cn</a></dd></div>
         </dl></section><nav class="contact-project" aria-label="${text.repository}">
           <a href="${issuesUrl}" target="_blank" rel="noopener noreferrer"><div><h2>${text.feedback}</h2><span>${text.issues}</span></div>${icon('arrow')}</a>
           <a href="${repositoryUrl}" target="_blank" rel="noopener noreferrer"><div><h2>${text.contribute}</h2><span>Hylfrd / zhengya-sharedtoolbox</span></div>${icon('arrow')}</a>

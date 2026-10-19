@@ -1,7 +1,7 @@
 import './admin.css';
 import { installAmbient } from './ambient';
 import { showToast } from './toast';
-import { siteFooter, updateSiteFooter } from './site-footer';
+import { rescanButton, siteFooter, updateSiteFooter } from './site-footer';
 import { validateForm, clearFieldError, markFieldError } from './validation';
 import { createAISettings, attachIconGenerator } from './ai-settings';
 import { createMembersPanel } from './member-settings';
@@ -158,7 +158,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
       return;
     }
     disposeBackground?.();
-    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><a class="adm-brand product-context" href="/"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></a><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['members','成员管理','user'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<a class="adm-nav-link" href="/admin?section=${key}" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span></a>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-refresh-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main>${siteFooter(location.pathname + location.search, 'zh', true)}</div></div>`;
+    root.innerHTML = `<div class="admin-shell"><header class="adm-sidebar"><div class="adm-brand-group brand-with-scan"><a class="adm-brand product-context" href="/"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></a>${rescanButton()}</div><nav class="adm-nav" aria-label="管理导航">${([['overview','概览','toolbox'],['devices','柜子与设备','lock'],['tools','工具管理','key'],['loans','借还记录','clock'],['members','成员管理','user'],['other','其他','info']] as [View,string,IconName][]).map(([key,label,symbol])=>`<a class="adm-nav-link" href="/admin?section=${key}" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(symbol)}<span>${label}</span></a>`).join('')}</nav><div class="adm-account-actions"><button class="adm-logout" id="admin-logout">${icon('logout')}<span>退出管理</span></button></div></header><div class="adm-workspace"><main class="adm-main"><div class="adm-page-heading"><div><h1 id="admin-page-title" tabindex="-1">${titles[view]}</h1></div><button class="adm-refresh-button" id="admin-refresh" aria-label="刷新数据">${icon('refresh')}<span>刷新</span></button></div><div id="admin-content" ${loaded?'':'aria-busy="true"'}>${loaded ? content() : '<div class="adm-loading">正在读取管理数据…</div>'}</div></main>${siteFooter(location.pathname + location.search, 'zh', true)}</div></div>`;
     disposeBackground = installAmbient(root.querySelector<HTMLElement>('.admin-shell')!);
     root.querySelectorAll<HTMLAnchorElement>('[data-view]').forEach(link=>link.addEventListener('click',event=>{
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

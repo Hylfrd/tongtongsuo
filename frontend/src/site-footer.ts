@@ -11,7 +11,7 @@ export function rescanButton(language: Language = 'zh'): string {
 }
 
 export function siteFooter(from: string, language: Language = 'zh', admin = false): string {
-  return `<footer class="${admin ? 'adm-footer' : 'site-footer'}"><div class="footer-links">${rescanButton(language)}<a class="contact-link" href="${contactHref(from, language)}">${language === 'en' ? 'Contact us' : '联系我们'}</a><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="license-link${admin ? ' adm-license' : ''}" href="${licenseHref(from)}">License</a><a class="github-link" href="${repositoryUrl}" target="_blank" rel="noopener noreferrer" aria-label="${language === 'en' ? 'Source code' : '项目源码'}">${githubIcon}</a></div></footer>`;
+  return `<footer class="${admin ? 'adm-footer' : 'site-footer'}"><div class="footer-links"><a class="contact-link" href="${contactHref(from, language)}">${language === 'en' ? 'Contact us' : '联系我们'}</a><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a><a class="license-link${admin ? ' adm-license' : ''}" href="${licenseHref(from)}">License</a><a class="github-link" href="${repositoryUrl}" target="_blank" rel="noopener noreferrer" aria-label="${language === 'en' ? 'Source code' : '项目源码'}">${githubIcon}</a></div></footer>`;
 }
 
 export function updateSiteFooter(root: Element, from: string, language: Language = 'zh'): void {

@@ -12,8 +12,8 @@ export function mountLicense(root: HTMLElement): void {
   root.innerHTML = `
     <main class="license-page">
       <header class="license-header">
-        <p class="license-brand">正雅苑 <span>· 共享工具箱</span></p>
-        <div class="license-header-actions">${rescanButton()}<a class="license-return" data-license-return>${icon('back')}<span>返回</span></a></div>
+        <div class="brand-with-scan"><p class="license-brand">正雅苑 <span>· 共享工具箱</span></p>${rescanButton()}</div>
+        <div class="license-header-actions"><a class="license-return" data-license-return>${icon('back')}<span>返回</span></a></div>
       </header>
       <article class="license-paper" aria-labelledby="license-title">
         <div class="license-heading"><h1 id="license-title">开源许可</h1><p>AGPL-3.0 · GNU Affero 通用公共许可证</p></div>

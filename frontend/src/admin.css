@@ -14,6 +14,7 @@
 .admin-shell ::selection,.adm-dialog ::selection { background:#c9ebf3; }
 .adm-sidebar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:20px; min-height:68px; padding:0 max(24px,calc((100vw - 1160px)/2)); background:#fff; border-bottom:1px solid var(--adm-line); }
 .adm-brand.product-context { flex-wrap:nowrap; flex-shrink:0; font-weight:400; white-space:nowrap; text-decoration:none; }
+.adm-brand-group { flex-shrink:0; }
 .adm-nav { display:flex; align-self:stretch; gap:4px; margin-left:auto; }
 .adm-nav .adm-nav-link,.adm-account-actions .adm-logout { position:relative; display:flex; align-items:center; justify-content:center; gap:7px; min-height:68px; padding:0 12px; border:0; border-radius:0; background:transparent; color:var(--adm-muted); font-size:13px; white-space:nowrap; text-decoration:none; transition:background var(--adm-motion-control) var(--adm-motion-ease),color var(--adm-motion-control) var(--adm-motion-ease); }
 .adm-nav .adm-nav-link:hover,.adm-account-actions .adm-logout:hover { background:#edf6f8; color:var(--adm-cyan); }
@@ -252,7 +253,7 @@
 .adm-password-fields { display:grid; gap:16px; }
 @media (max-width:1120px) {
   .adm-sidebar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 16px; padding:0 24px; }
-  .adm-brand { grid-column:1; grid-row:1; }
+  .adm-brand-group { grid-column:1; grid-row:1; }
   .adm-nav { grid-column:1/-1; grid-row:2; margin-left:0; justify-content:space-between; }
   .adm-account-actions { grid-column:2; grid-row:1; }
   .adm-nav .adm-nav-link,.adm-account-actions .adm-logout { min-height:48px; padding-inline:12px; }

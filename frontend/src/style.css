@@ -295,17 +295,34 @@ input::placeholder { color:#657b83; }
 .admin-access-message { flex:1; display:grid; place-items:center; min-height:0; text-align:center; }
 .admin-access-message h1 { margin:0; font-size:20px; line-height:1.6; font-weight:500; }
 
-/* The third field stays reachable without shrinking the illustrated scene. */
+/* Let the illustration yield height before the form needs to scroll. */
 .roster-login-layout .login-hint { margin-bottom:18px; }
 .roster-name-help { margin:-4px 0 15px; color:var(--muted); font-size:12px; line-height:1.5; }
 .roster-login-return { margin-top:8px; min-height:44px; padding-left:0; }
 .login-mode-error p { margin:16px 0; color:var(--muted); }
 @container(max-width:720px) {
-  .page-content > .roster-login-layout { flex:1 0 auto; }
-  .roster-login-layout { gap:14px; }
-  .roster-login-layout .login-illustration { flex:1 0 180px; max-height:240px; }
-  .roster-login-layout .login-hint { margin-bottom:12px; }
-  .roster-login-layout .field { margin-bottom:10px; }
+  .page-content > .roster-login-layout { flex:1 1 0; }
+  .roster-login-layout { gap:clamp(10px,2dvh,18px); }
+  .roster-login-layout .login-illustration { flex:1 1 0; min-height:128px; max-height:260px; }
+  .roster-login-layout .login-hint { margin-bottom:10px; }
+  .roster-login-layout .field { margin-bottom:8px; }
+  .roster-login-layout .field label { margin-bottom:4px; }
   .roster-login-layout .field input { min-height:44px; padding-block:9px; }
-  .roster-login-layout .roster-name-help { margin:-2px 0 10px; }
+  .roster-login-layout .roster-name-help { margin:-2px 0 8px; }
+}
+@media(max-height:680px) {
+  @container(max-width:720px) {
+    .roster-login-layout { gap:10px; padding-block:2px 4px; }
+    .roster-login-layout .login-illustration { min-height:112px; padding:10px 16px 8px; }
+    .roster-login-layout .illustration-title { gap:2px; }
+    .roster-login-layout .illustration-title strong { font-size:24px; }
+    .roster-login-layout .illustration-title span { font-size:17px; }
+    .roster-login-layout .illustration-title .illustration-cabinet { font-size:18px; }
+    .roster-login-layout .panel-heading { margin-bottom:6px; }
+    .roster-login-layout .login-hint { margin-bottom:8px; }
+    .roster-login-layout .field { margin-bottom:6px; }
+    .roster-login-layout .field label { font-size:12px; }
+    .roster-login-layout .roster-name-help { margin:-2px 0 6px; }
+    .roster-login-layout .primary-button { min-height:44px; margin-top:4px; }
+  }
 }

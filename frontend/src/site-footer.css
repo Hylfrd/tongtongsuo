@@ -5,6 +5,9 @@
 .rescan-button:hover:not(:disabled) { color:#00697d; border-color:#65a1af; background:#e2f2f5; }
 .rescan-button:focus-visible { outline:3px solid #07839a; outline-offset:3px; }
 .license-header-actions { display:flex; align-items:center; gap:12px; }
-.license-header-actions .rescan-button { width:40px; height:40px; }
+.brand-with-scan,.illustration-brand,.panel-title { display:flex; align-items:center; gap:12px; min-width:0; }
+.brand-with-scan > .product-context { min-width:0; }
+.brand-with-scan > .rescan-button { align-self:center; }
+@media (max-width:720px) { .brand-with-scan,.illustration-brand,.panel-title { gap:8px; } }
 @media (max-width:360px) { .site-footer > .footer-links { column-gap:7px; } }
 @media (prefers-reduced-motion:reduce) { .rescan-button { transition:none; } }

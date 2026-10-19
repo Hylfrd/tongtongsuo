@@ -9,7 +9,7 @@ import { showToast } from './toast';
 import { validateForm, clearFieldError } from './validation';
 import { messages, type Language } from './i18n';
 import { shouldOpenAdmin } from './routing';
-import { installRescan, siteFooter, updateSiteFooter } from './site-footer';
+import { installRescan, rescanButton, siteFooter, updateSiteFooter } from './site-footer';
 import { RequestScope, StaleRequestError } from './request-scope';
 
 type Identity = { name: string; school_code: string | null; role?: 'admin' };
@@ -102,8 +102,8 @@ function licenseSource(): string {
   url.searchParams.set('lang', language);
   return url.pathname + url.search + url.hash;
 }
-function illustration(): string {
-  return `<div class="login-illustration"><div class="illustration-title"><div class="illustration-meta"><span>${t('hall')}</span>${cabinet ? `<span class="illustration-cabinet">${esc(cabinetLabel())}</span>` : ''}</div><strong>${t('title')}</strong></div><div class="illustration-stage" aria-hidden="true"><img class="scene-flower" src="${flower}" alt=""><div class="scene-wolf">${wolf()}</div><img class="scene-toolbox" src="${toolbox}" alt=""><img class="scene-screwdriver" src="${screwdriver}" alt=""></div></div>`;
+function illustration(scan = false): string {
+  return `<div class="login-illustration"><div class="illustration-title"><div class="illustration-meta"><span>${t('hall')}</span>${cabinet ? `<span class="illustration-cabinet">${esc(cabinetLabel())}</span>` : ''}</div><div class="illustration-brand"><strong>${t('title')}</strong>${scan ? rescanButton(language) : ''}</div></div><div class="illustration-stage" aria-hidden="true"><img class="scene-flower" src="${flower}" alt=""><div class="scene-wolf">${wolf()}</div><img class="scene-toolbox" src="${toolbox}" alt=""><img class="scene-screwdriver" src="${screwdriver}" alt=""></div></div>`;
 }
 function toolArt(tool: {icon: string; icon_data: string | null}): string {
   const symbols: Record<string, IconName> = { tape: 'tape', hammer: 'hammer', pliers: 'pliers', toolbox: 'toolbox' };
@@ -121,7 +121,7 @@ function loginContent(): string {
     <div class="field"><label for="username">${t('username')}</label><div class="input-wrap">${icon('user')}<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="${t('accountHint')}" ${adminLogin && !adminPath ? 'value="admin"' : ''} required></div></div>
     <div class="field"><label for="password">${t('password')}</label><div class="input-wrap">${icon('key')}<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" placeholder="${t('passwordHint')}" required></div></div>`;
   const form = loginMode || adminPath ? `<p class="login-hint">${t(roster ? 'rosterLoginHint' : adminLogin ? 'adminLoginHint' : 'loginHint')}</p>${!preview || previewLoginMode ? `<form id="login-form" method="post" novalidate><fieldset ${busy ? 'disabled' : ''}>${fields}<button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${adminLogin && !adminPath ? `<button class="text-button roster-login-return" data-action="roster-login">${icon('back')} ${t('memberLogin')}</button>` : ''}` : `<div class="login-mode-error"><p>${t('loginModeFailed')}</p><button class="secondary-button" data-action="retry-login-mode">${t('retry')}</button></div>`;
-  return `<section class="login-layout${roster ? ' roster-login-layout' : ''}">${illustration()}<div class="login-panel"><div class="panel-heading"><h1 tabindex="-1">${t('login')}</h1>${languageButton()}</div>${form}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
+  return `<section class="login-layout${roster ? ' roster-login-layout' : ''}">${illustration()}<div class="login-panel"><div class="panel-heading"><div class="panel-title"><h1 tabindex="-1">${t('login')}</h1>${rescanButton(language)}</div>${languageButton()}</div>${form}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
 }
 function updateRosterAdminFields(): void {
   if(!rosterLogin())return;
@@ -152,7 +152,7 @@ async function loadLoginMode(): Promise<void> {
 }
 
 function scanContent(): string {
-  return `<section class="login-layout">${illustration()}<div class="scan-panel"><div class="panel-heading"><h1 tabindex="-1">${t('scan')}</h1>${languageButton()}</div>${logoutButton()}<p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button></div></section>`;
+  return `<section class="login-layout">${illustration(true)}<div class="scan-panel"><div class="panel-heading"><h1 tabindex="-1">${t('scan')}</h1>${languageButton()}</div>${logoutButton()}<p>${t('scanDetail')}</p><button class="primary-button" data-action="scan">${icon('scan')} ${t('startScan')}</button></div></section>`;
 }
 function homeContent(): string {
   return `<section class="home-layout"><div class="home-heading"><h1 tabindex="-1">${t('welcome')}<span>${esc(user?.name)}</span></h1>${adminEntry('welcome')}</div><div class="choice-layout"><button class="choice-card choice-borrow" data-action="borrow"><span class="choice-label">${t('borrow')} ${icon('arrow')}</span><span class="choice-art"><img src="${toolbox}" alt=""></span></button><button class="choice-card choice-return" data-action="return"><span class="choice-label">${t('return')} ${icon('arrow')}</span><span class="choice-art"><img src="${mascot}" alt=""></span></button></div></section>`;
@@ -196,7 +196,7 @@ function render(): void {
   const showHeader = !['loading', 'login', 'scan'].includes(view);
   const pageTools = app.querySelector<HTMLElement>('.page-tools')!;
   pageTools.hidden = !showHeader;
-  pageTools.innerHTML = showHeader ? `<div class="session-identity"><div class="product-context"><span class="product-hall">${t('hall')}</span><span class="product-name">${t('title')}</span></div><div class="session-controls">${cabinet ? `<strong class="session-cabinet">${esc(cabinetLabel())}</strong>` : ''}</div></div><div class="session-actions">${adminEntry('header')}${languageButton()}${logoutButton()}</div>` : '';
+  pageTools.innerHTML = showHeader ? `<div class="session-identity"><div class="brand-with-scan"><div class="product-context"><span class="product-hall">${t('hall')}</span><span class="product-name">${t('title')}</span></div>${rescanButton(language)}</div><div class="session-controls">${cabinet ? `<strong class="session-cabinet">${esc(cabinetLabel())}</strong>` : ''}</div></div><div class="session-actions">${adminEntry('header')}${languageButton()}${logoutButton()}</div>` : '';
   app.querySelector('.preview-slot')!.innerHTML = preview ? `<p class="preview-note">${t('preview')}</p>` : '';
   app.querySelector('.page-content')!.innerHTML = content;
   updateSiteFooter(app, licenseSource(), language);
@@ -420,7 +420,7 @@ async function initialize(): Promise<void> {
     document.documentElement.lang = 'zh-CN'; document.title = '正雅苑 · 工具箱管理';
     adminMounted = true;
     app.className = `student-app admin-mobile-notice${new URLSearchParams(location.search).get('mobile') === '1' ? ' phone-preview' : ''}`;
-    app.innerHTML = `<main class="page-shell"><header class="page-tools"><div class="product-context"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></div></header><section class="admin-access-message"><h1>管理端仅支持电脑访问</h1></section></main>${siteFooter(location.pathname + location.search)}`;
+    app.innerHTML = `<main class="page-shell"><header class="page-tools"><div class="brand-with-scan"><div class="product-context"><span class="product-hall">正雅苑</span><span class="product-name">共享工具箱</span></div>${rescanButton()}</div></header><section class="admin-access-message"><h1>管理端仅支持电脑访问</h1></section></main>${siteFooter(location.pathname + location.search)}`;
     disposeAmbient = installAmbient(app);
     return;
   }

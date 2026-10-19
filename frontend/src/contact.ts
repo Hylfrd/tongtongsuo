@@ -4,7 +4,7 @@ import { icon } from './icons';
 import type { Language } from './i18n';
 import { safeReturnPath } from './license-navigation';
 import { issuesUrl, repositoryUrl } from './project';
-import { siteFooter } from './site-footer';
+import { rescanButton, siteFooter } from './site-footer';
 
 export function mountContact(root: HTMLElement): void {
   const query = new URLSearchParams(location.search);
@@ -23,7 +23,7 @@ export function mountContact(root: HTMLElement): void {
     disposeBackground?.();
     root.className = 'student-app contact-app';
     root.innerHTML = `<main class="page-shell contact-shell">
-      <header class="contact-header"><div class="product-context"><span class="product-hall">${text.hall}</span><span class="product-name">${text.toolbox}</span></div><div class="contact-header-actions"><button class="text-button language-button" type="button" data-contact-language aria-label="${language === 'zh' ? 'Switch to English' : '切换为中文'}">${language === 'zh' ? 'EN' : '中文'}</button><a class="secondary-button contact-return" data-contact-return>${icon('back')}<span>${text.back}</span></a></div></header>
+      <header class="contact-header"><div class="brand-with-scan"><div class="product-context"><span class="product-hall">${text.hall}</span><span class="product-name">${text.toolbox}</span></div>${rescanButton(language)}</div><div class="contact-header-actions"><button class="text-button language-button" type="button" data-contact-language aria-label="${language === 'zh' ? 'Switch to English' : '切换为中文'}">${language === 'zh' ? 'EN' : '中文'}</button><a class="secondary-button contact-return" data-contact-return>${icon('back')}<span>${text.back}</span></a></div></header>
       <div class="contact-scroll"><article class="contact-paper" aria-labelledby="contact-title">
         <div class="contact-heading"><h1 id="contact-title">${text.title}</h1><p>${text.help}</p></div>
         <div class="contact-columns"><section aria-labelledby="developer-title"><h2 id="developer-title">${text.developer}</h2><dl class="contact-details">

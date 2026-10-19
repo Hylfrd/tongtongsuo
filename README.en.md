@@ -88,6 +88,16 @@ npm --prefix frontend test
 cd backend && python -m pytest -q
 ```
 
+### GitHub Actions
+
+Before using GitHub Actions for automatic deployment, open **Settings → Secrets and variables → Actions → Repository secrets** in the repository. Click **New repository secret** to add these three values:
+
+| Name | Value |
+| --- | --- |
+| `SERVER_HOST` | Server public IP address or domain name |
+| `SERVER_USER` | SSH username |
+| `SERVER_PASSWORD` | SSH password |
+
 ## License
 
 AGPL-3.0, see [LICENSE](LICENSE).

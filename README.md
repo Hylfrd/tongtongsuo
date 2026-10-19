@@ -88,6 +88,16 @@ npm --prefix frontend test
 cd backend && python -m pytest -q
 ```
 
+### GitHub Actions
+
+使用 GitHub Actions 自动部署前，在仓库的 **Settings → Secrets and variables → Actions → Repository secrets** 中，点击 **New repository secret** 添加以下三个参数：
+
+| 名称 | 内容 |
+| --- | --- |
+| `SERVER_HOST` | 服务器的公网 IP 或域名 |
+| `SERVER_USER` | SSH 登录用户名 |
+| `SERVER_PASSWORD` | SSH 登录密码 |
+
 ## 开源协议
 
 AGPL-3.0，详见 [LICENSE](LICENSE)。

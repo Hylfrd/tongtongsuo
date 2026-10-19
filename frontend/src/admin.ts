@@ -321,9 +321,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     mountLockEditor();
     const target=root.querySelector<HTMLElement>('#admin-lock-editor');
     if(expanding && target && !matchMedia('(prefers-reduced-motion:reduce)').matches){
-      const height=target.getBoundingClientRect().height;
-      target.style.overflow='clip';
-      void target.animate([{maxHeight:'0px'},{maxHeight:`${height}px`}],{duration:650,easing:'cubic-bezier(.2,.8,.2,1)'}).finished.finally(()=>{target.style.overflow='';}).catch(()=>{});
+      target.animate([{opacity:.65,transform:'translateY(12px)'},{opacity:1,transform:'translateY(0)'}],{duration:650,easing:'cubic-bezier(.2,.8,.2,1)'});
     }
     root.querySelector('#admin-lock-editor')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth',block:'nearest'});
   }
@@ -344,8 +342,7 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     mountLockEditor();
     const target=root.querySelector<HTMLElement>('#admin-gateway-editor');
     if(expanding && target && !matchMedia('(prefers-reduced-motion:reduce)').matches){
-      const height=target.getBoundingClientRect().height;target.style.overflow='clip';
-      void target.animate([{maxHeight:'0px'},{maxHeight:`${height}px`}],{duration:650,easing:'cubic-bezier(.2,.8,.2,1)'}).finished.finally(()=>{target.style.overflow='';}).catch(()=>{});
+      target.animate([{opacity:.65,transform:'translateY(12px)'},{opacity:1,transform:'translateY(0)'}],{duration:650,easing:'cubic-bezier(.2,.8,.2,1)'});
     }
     target?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth',block:'nearest'});
   }
@@ -354,14 +351,13 @@ export async function mountAdmin(root: HTMLElement, user: {name: string}, onLogo
     editorClosing=true;
     const target=root.querySelector<HTMLElement>(kind==='locks'?'#admin-lock-editor':'#admin-gateway-editor');
     if(target && !matchMedia('(prefers-reduced-motion:reduce)').matches){
-      const height=target.getBoundingClientRect().height;
-      target.getAnimations().forEach(animation=>animation.cancel());target.style.overflow='clip';
-      await target.animate([{maxHeight:`${height}px`},{maxHeight:'0px'}],{duration:650,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'}).finished.catch(()=>{});
+      target.getAnimations().forEach(animation=>animation.cancel());
+      await target.animate([{opacity:1,transform:'translateY(0)'},{opacity:0,transform:'translateY(8px)'}],{duration:650,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'}).finished.catch(()=>{});
     }
     if(kind==='locks'){openedLockId=null;lockEditor?.dispose();lockEditor=undefined;}
     else {openedGatewayId=null;gatewayEditor?.dispose();gatewayEditor=undefined;}
     target?.replaceChildren();target?.getAnimations().forEach(animation=>animation.cancel());
-    if(target)target.style.overflow='';editorClosing=false;
+    editorClosing=false;
   }
   async function refresh(focusSelector = captureFocus()): Promise<void> {
     const button=root.querySelector<HTMLButtonElement>('#admin-refresh');if(button){button.disabled=true;button.setAttribute('aria-busy','true');}

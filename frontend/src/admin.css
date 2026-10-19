@@ -1,5 +1,7 @@
 .admin-shell,.adm-dialog { --adm-motion-control:420ms; --adm-motion-panel:650ms; --adm-motion-ease:cubic-bezier(.22,.72,.24,1); }
 .admin-shell { --adm-ink:#203e4c; --adm-muted:#526b78; --adm-line:#d8e5e9; --adm-cyan:#087c9c; position:relative; isolation:isolate; display:flex; flex-direction:column; min-height:100dvh; color:var(--adm-ink); background:#fafaf6; font-size:14px; line-height:1.5; }
+/* Long settings pages keep four decorative layers at viewport size. */
+.admin-shell > .ambient-background { position:fixed; contain:strict; }
 .admin-shell *, .adm-dialog * { box-sizing:border-box; }
 .admin-shell h1,.admin-shell h2,.admin-shell h3,.admin-shell p,.adm-dialog h2,.adm-dialog p { margin:0; }
 .admin-shell button,.adm-dialog button,.adm-dialog input,.adm-dialog select,.adm-dialog textarea { font:inherit; }
@@ -60,11 +62,12 @@
 .adm-cabinet h2 { font-size:18px; line-height:1.4; overflow-wrap:anywhere; }
 .adm-cabinet > p { color:var(--adm-muted); font-size:12px; margin-top:4px; overflow-wrap:anywhere; }
 .adm-cabinet-summary { display:flex; gap:16px; margin:12px 0 8px; color:var(--adm-muted); font-size:12px; }
-.adm-bound-lock { display:flex; align-items:center; gap:7px; padding:8px 0; border-top:1px solid var(--adm-line); font-size:12px; }
+.adm-bound-lock { display:flex; align-items:center; gap:7px; min-height:36px; padding:8px 0; border-top:1px solid var(--adm-line); font-size:12px; }
 .adm-bound-lock svg { width:15px; height:15px; }
 .adm-bound-lock > span:nth-child(2) { flex:1; overflow-wrap:anywhere; }
 .adm-bound-lock > span:last-child { color:var(--adm-muted); white-space:nowrap; }
 .adm-scan-links { display:flex; flex-wrap:wrap; align-items:center; gap:0 16px; margin-top:8px; padding-top:4px; border-top:1px solid var(--adm-line); }
+.adm-bound-lock + .adm-scan-links { margin-top:0; }
 .adm-scan-links a { display:inline-flex; align-items:center; gap:5px; min-height:36px; color:#08718f; font-size:12px; text-decoration:none; }
 .adm-scan-links a:hover { text-decoration:underline; text-underline-offset:4px; }
 .adm-scan-links svg { width:15px; height:15px; }
@@ -281,21 +284,23 @@
 .admin-shell .adm-stats > div { position:relative; border-right-color:transparent; }
 .admin-shell .adm-stats > div:not(:last-child)::after { inset:0 -1px 0 auto; width:1px; }
 .admin-shell .adm-ai-process { border-top-color:#9eb9c5; }
-@supports ((backdrop-filter:invert(1)) or (-webkit-backdrop-filter:invert(1))) {
-  /* Invert the actual pixels under each line, including the moving background. */
+@supports (mix-blend-mode:difference) {
+  /* White difference gives the same moving inverse without a filter per line. */
   .admin-shell :is(.adm-ai-settings,.adm-ai-advanced,.adm-ai-test,.adm-setting-row,.adm-ttlock-settings)::before,
   .admin-shell :is(.adm-tabs,.adm-stats,.adm-footer,.adm-ai-settings,.adm-setting-row,.adm-member-mode-row)::after,
   .admin-shell .adm-stats > div:not(:last-child)::after {
-    background:transparent; -webkit-backdrop-filter:invert(1); backdrop-filter:invert(1); opacity:.26;
+    background:#fff; mix-blend-mode:difference; opacity:.26;
   }
 }
-@supports (interpolate-size:allow-keywords) and selector(details::details-content) {
-  .admin-shell details { interpolate-size:allow-keywords; }
+@supports selector(details::details-content) {
   .admin-shell details::details-content {
-    block-size:0; opacity:0; overflow:clip;
-    transition:block-size var(--adm-motion-panel) var(--adm-motion-ease),opacity var(--adm-motion-control) var(--adm-motion-ease),content-visibility var(--adm-motion-panel) allow-discrete;
+    opacity:0; transform:translateY(-4px); overflow:clip;
+    transition:opacity var(--adm-motion-panel) var(--adm-motion-ease),transform var(--adm-motion-panel) var(--adm-motion-ease),content-visibility var(--adm-motion-panel) allow-discrete;
   }
-  .admin-shell details[open]::details-content { block-size:auto; opacity:1; }
+  .admin-shell details[open]::details-content { opacity:1; transform:translateY(0); }
+  @starting-style {
+    .admin-shell details[open]::details-content { opacity:0; transform:translateY(-4px); }
+  }
 }
 @media(prefers-reduced-motion:reduce) { .admin-shell details::details-content { transition:none; } }
 @media(forced-colors:active) {
@@ -303,5 +308,5 @@
   .adm-checkbox input::before { display:none; }
   .admin-shell :is(.adm-ai-settings,.adm-ai-advanced,.adm-ai-test,.adm-setting-row,.adm-ttlock-settings)::before,
   .admin-shell :is(.adm-tabs,.adm-stats,.adm-footer,.adm-ai-settings,.adm-setting-row,.adm-member-mode-row)::after,
-  .admin-shell .adm-stats > div:not(:last-child)::after { background:CanvasText; opacity:1; backdrop-filter:none; -webkit-backdrop-filter:none; }
+  .admin-shell .adm-stats > div:not(:last-child)::after { background:CanvasText; opacity:1; mix-blend-mode:normal; }
 }

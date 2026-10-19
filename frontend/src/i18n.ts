@@ -1,7 +1,7 @@
 export type Language = 'zh' | 'en';
 export const messages = {
   zh: {
-    fullName: '姓名', nameHint: '输入姓名', schoolCode: '学号', schoolCodeHint: '输入学号', roomNumber: '宿舍号', roomNumberHint: '输入宿舍号',
+    fullName: '姓名', nameHint: '输入姓名', schoolCode: '学号', schoolCodeHint: '纯数字学号，如2530024107', roomNumber: '宿舍号', roomNumberHint: '如B404',
     rosterLoginHint: '使用姓名、学号和宿舍号登录', adminLoginHint: '使用管理员账号登录', memberLogin: '返回成员登录', confirmPassword: '确认密码', repeatPasswordHint: '请再次输入密码',
     internationalNameHint: '如果你是外国人，请输入包含空格的完整大写姓名。',
     rosterAuthFailed: '姓名、学号或宿舍号未通过验证，请重试。', loginModeFailed: '无法加载登录方式，请重试。', typeLoginDetails: '请手动输入登录信息。',
@@ -13,7 +13,7 @@ export const messages = {
     preview: '界面预览 · 不操作真实柜锁', previewLogin: '预览借还流程', previewUser: '苑舍同学', demoDone: '演示完成', previewOnly: '仅更新本页演示记录', source: '项目源码', noSelection: '请先选择工具。',
   },
   en: {
-    fullName: 'Full name', nameHint: 'Enter your full name', schoolCode: 'Student ID', schoolCodeHint: 'Enter your student ID', roomNumber: 'Room number', roomNumberHint: 'Enter your room number',
+    fullName: 'Full name', nameHint: 'Enter your full name', schoolCode: 'Student ID', schoolCodeHint: 'Digits only, e.g. 2530024107', roomNumber: 'Room number', roomNumberHint: 'e.g. B404',
     rosterLoginHint: 'Sign in with your name, student ID and room number', adminLoginHint: 'Sign in with your admin account', memberLogin: 'Back to member sign-in', confirmPassword: 'Confirm password', repeatPasswordHint: 'Enter your password again',
     internationalNameHint: 'If you are an international student, enter your full name in CAPITAL LETTERS, including spaces.',
     rosterAuthFailed: 'Name, student ID or room number could not be verified. Please try again.', loginModeFailed: 'Unable to load the sign-in method. Please try again.', typeLoginDetails: 'Please type your sign-in details.',

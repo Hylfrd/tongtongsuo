@@ -1,7 +1,7 @@
 export type Language = 'zh' | 'en';
 export const messages = {
   zh: {
-    fullName: '姓名', nameHint: '输入姓名', schoolCode: '学号', schoolCodeHint: '纯数字学号，如2530024107', roomNumber: '宿舍号', roomNumberHint: '如B404',
+    fullName: '姓名', nameHint: '输入姓名', schoolCode: '学号', schoolCodeHint: '纯数字学号，如2530024107', roomNumber: '宿舍号', roomNumberHint: '如 B404',
     rosterLoginHint: '使用姓名、学号和宿舍号登录', adminLoginHint: '使用管理员账号登录', memberLogin: '返回成员登录', confirmPassword: '确认密码', repeatPasswordHint: '请再次输入密码',
     internationalNameHint: '如果你是外国人，请输入包含空格的完整大写姓名。',
     rosterAuthFailed: '姓名、学号或宿舍号未通过验证，请重试。', loginModeFailed: '无法加载登录方式，请重试。', typeLoginDetails: '请手动输入登录信息。',

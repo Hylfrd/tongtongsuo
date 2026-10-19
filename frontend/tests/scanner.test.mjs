@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 import jsQR from 'jsqr';
-import {CameraLease, CameraLifecycle, coverCrop, parseCabinetQr, chooseNativeQrDetector, decodeWithDeadline} from '../src/scanner-core.ts';
+import {CameraLease, CameraLifecycle, containSize, zoomCrop, parseCabinetQr, chooseNativeQrDetector, decodeWithDeadline} from '../src/scanner-core.ts';
 
 const origin = 'https://bnbu.hmcl-helper.cn';
 
@@ -138,15 +138,14 @@ test('asynchronous decoder results from a closed or paused stream cannot navigat
   assert.equal(accepted,0);
 });
 
-test('cover crop matches visible landscape-camera area on a portrait phone', () => {
-  const crop=coverCrop(1920,1080,390,844);
-  assert.ok(Math.abs(crop.width/crop.height-390/844)<1e-10);
-  assert.equal(crop.height,1080); assert.equal(crop.y,0);
-  assert.ok(Math.abs(crop.x-(1920-crop.width)/2)<1e-10);
-  assert.ok(crop.x>700); // Offscreen left/right codes must not be decoded.
-  assert.deepEqual(coverCrop(1080,1920,400,400),{x:0,y:420,width:1080,height:1080});
-  assert.deepEqual(coverCrop(1280,720,1280,720),{x:0,y:0,width:1280,height:720});
-  assert.equal(coverCrop(0,720,390,844),null);
+test('portrait scanning preserves the full source at 1x and decodes the same crop as image zoom', () => {
+  assert.deepEqual(containSize(1920,1080,390,844),{width:390,height:219.375});
+  assert.deepEqual(zoomCrop(1920,1080),{x:0,y:0,width:1920,height:1080});
+  assert.deepEqual(zoomCrop(1920,1080,2),{x:480,y:270,width:960,height:540});
+  assert.deepEqual(containSize(1080,1920,390,600),{width:337.5,height:600});
+  assert.deepEqual(zoomCrop(1080,1920,2),{x:270,y:480,width:540,height:960});
+  assert.equal(containSize(0,720,390,844),null);
+  assert.equal(zoomCrop(1280,720,0.5),null);
 });
 
 test('native detection is selected only when QR support is advertised', async () => {

@@ -37,11 +37,17 @@ export class CameraLease<T extends CameraStream = MediaStream> {
   }
 }
 
-/** Source rectangle matching CSS object-fit: cover with centered positioning. */
-export function coverCrop(width: number, height: number, viewWidth: number, viewHeight: number) {
+/** Fit the complete source inside the viewport; never crop to fill a portrait screen. */
+export function containSize(width: number, height: number, viewWidth: number, viewHeight: number) {
   if (![width,height,viewWidth,viewHeight].every(value => Number.isFinite(value) && value > 0)) return null;
-  const scale = Math.max(viewWidth / width, viewHeight / height);
-  const cropWidth = viewWidth / scale, cropHeight = viewHeight / scale;
+  const scale = Math.min(viewWidth / width, viewHeight / height);
+  return {width:width*scale, height:height*scale};
+}
+
+/** Match the centered software zoom shown inside the source's own aspect-ratio box. */
+export function zoomCrop(width: number, height: number, zoom=1) {
+  if (![width,height,zoom].every(value => Number.isFinite(value) && value > 0) || zoom < 1) return null;
+  const cropWidth=width/zoom, cropHeight=height/zoom;
   return {x:(width-cropWidth)/2, y:(height-cropHeight)/2, width:cropWidth, height:cropHeight};
 }
 

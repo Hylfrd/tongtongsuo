@@ -123,9 +123,24 @@ function loginContent(): string {
   const form = loginMode || adminPath ? `<p class="login-hint">${t(roster ? 'rosterLoginHint' : adminLogin ? 'adminLoginHint' : 'loginHint')}</p>${!preview || previewLoginMode ? `<form id="login-form" method="post" novalidate><fieldset ${busy ? 'disabled' : ''}>${fields}<button class="primary-button" id="login-button" type="submit">${t('login')} ${icon('arrow')}</button></fieldset></form>` : ''}${adminLogin && !adminPath ? `<button class="text-button roster-login-return" data-action="roster-login">${icon('back')} ${t('memberLogin')}</button>` : ''}` : `<div class="login-mode-error"><p>${t('loginModeFailed')}</p><button class="secondary-button" data-action="retry-login-mode">${t('retry')}</button></div>`;
   return `<section class="login-layout${roster ? ' roster-login-layout' : ''}">${illustration()}<div class="login-panel"><div class="panel-heading"><h1 tabindex="-1">${t('login')}</h1>${languageButton()}</div>${form}${preview ? `<button class="secondary-button preview-entry" data-action="preview-login">${t('previewLogin')}</button>` : ''}</div></section>`;
 }
-function switchToAdminLogin(): void {
-  adminLogin = true; render();
-  document.querySelector<HTMLInputElement>('#password')?.focus({preventScroll:true});
+function updateRosterAdminFields(): void {
+  if(!rosterLogin())return;
+  const admin=document.querySelector<HTMLInputElement>('#name')?.value.trim().toLowerCase()==='admin';
+  for(const [id,label,hint] of [['school_code','schoolCode','schoolCodeHint'],['room_number','roomNumber','roomNumberHint']] as const){
+    const input=document.getElementById(id) as HTMLInputElement|null;
+    if(!input)continue;
+    const type=admin?'password':'text';
+    if(input.type!==type){if(input.type==='password')input.value='';input.type=type;}
+    input.maxLength=admin?256:64;
+    input.autocomplete=admin?'current-password':id==='school_code'?'username':'off';
+    input.setAttribute('autocapitalize',admin||id==='school_code'?'none':'characters');
+    input.placeholder=t(admin?id==='school_code'?'passwordHint':'repeatPasswordHint':hint);
+    document.querySelector(`label[for="${id}"]`)!.textContent=t(admin?id==='school_code'?'password':'confirmPassword':label);
+  }
+  const hint=document.querySelector('.login-hint');
+  if(hint)hint.textContent=t(admin?'adminLoginHint':'rosterLoginHint');
+  const internationalHint=document.getElementById('roster-name-help');
+  if(internationalHint)internationalHint.hidden=admin;
 }
 async function loadLoginMode(): Promise<void> {
   loginMode = null;
@@ -192,12 +207,9 @@ function render(): void {
     if (event.target instanceof HTMLInputElement) { event.target.setCustomValidity(''); clearFieldError(event.target); }
   });
   const nameInput = loginForm?.querySelector<HTMLInputElement>('#name');
-  nameInput?.addEventListener('blur', () => {
-    if (!busy && nameInput.value.trim().toLowerCase() === 'admin') switchToAdminLogin();
-  });
-  nameInput?.addEventListener('keydown', event => {
-    if (event.key === 'Enter' && nameInput.value.trim().toLowerCase() === 'admin') { event.preventDefault(); switchToAdminLogin(); }
-  });
+  nameInput?.addEventListener('input',updateRosterAdminFields);
+  nameInput?.addEventListener('change',updateRosterAdminFields);
+  updateRosterAdminFields();
   for (const kind of ['copy', 'cut', 'paste', 'drop', 'dragstart']) loginForm?.addEventListener(kind, event => {
     if (!(event.target instanceof HTMLInputElement)) return;
     event.preventDefault();
@@ -240,21 +252,25 @@ async function login(event: Event): Promise<void> {
   if (busy || preview || Date.now() < loginBlockedUntil || (!loginMode && !adminPath)) return;
   const form = event.currentTarget as HTMLFormElement;
   const roster = rosterLogin();
+  updateRosterAdminFields();
+  const adminRoster=roster&&(form.elements.namedItem('name') as HTMLInputElement).value.trim().toLowerCase()==='admin';
+  const raw = (name: string): string => (form.elements.namedItem(name) as HTMLInputElement).value;
   const value = (name: string): string => (form.elements.namedItem(name) as HTMLInputElement).value.trim();
-  if (roster && value('name').toLowerCase() === 'admin') { switchToAdminLogin(); return; }
   for (const input of form.querySelectorAll<HTMLInputElement>('input[required]')) {
     if (input.type !== 'password') input.value = input.value.trim();
   }
   if (!validateForm(form)) return;
   const password = form.querySelector<HTMLInputElement>('#password');
-  const payload = roster ? {name:value('name'),school_code:value('school_code'),room_number:value('room_number')} : {username:value('username'),password:password!.value};
+  const passwordInputs=[...form.querySelectorAll<HTMLInputElement>('input[type="password"]')];
+  const clearPasswords=()=>passwordInputs.forEach(input=>{input.value='';});
+  const payload = roster ? {name:value('name'),school_code:adminRoster?raw('school_code'):value('school_code'),room_number:adminRoster?raw('room_number'):value('room_number')} : {username:value('username'),password:password!.value};
   invalidateRequests();
   const ticket = requestScope.begin();
   setBusy(true);
   try {
     const response = await fetch('/api/auth/login', {method:'POST', credentials:'same-origin', cache:'no-store', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload), signal:AbortSignal.any([ticket.signal,AbortSignal.timeout(45000)])});
     ticket.check();
-    if (password) password.value = '';
+    clearPasswords();
     if (!response.ok) {
       const retry = response.headers.get('Retry-After');
       if (retry && /^\d+$/.test(retry)) { loginBlockedUntil = Date.now() + Math.min(3600, Number(retry)) * 1000; clearInterval(cooldownTimer); cooldownTimer = setInterval(updateLoginButton, 1000); }
@@ -267,7 +283,7 @@ async function login(event: Event): Promise<void> {
     ticket.check(); user = identity;
     await enterAccount(true);
   } catch (error) { if (ticket.current()) errorToast(error instanceof TypeError || error instanceof DOMException ? new Error(t('network')) : error); }
-  finally { if (password) password.value = ''; if (ticket.current()) setBusy(false); ticket.release(); }
+  finally { clearPasswords(); if (ticket.current()) setBusy(false); ticket.release(); }
 }
 async function enterAccount(freshLogin = false): Promise<void> {
   if (shouldOpenAdmin(user?.role, location.pathname, freshLogin) && user) {
@@ -380,6 +396,7 @@ app.addEventListener('click', event => {
     language = language === 'zh' ? 'en' : 'zh';
     render();
     for (const [id,value] of draft) { const input = document.getElementById(id) as HTMLInputElement | null; if (input) input.value = value; }
+    updateRosterAdminFields();
     document.querySelector<HTMLButtonElement>('.language-button')?.focus();
   } else if (action === 'roster-login') { adminLogin = false; render(); document.querySelector<HTMLInputElement>('#name')?.focus({preventScroll:true}); }
   else if (action === 'retry-login-mode') {
@@ -441,5 +458,5 @@ window.addEventListener('pageshow', event => {
   if (loginBlockedUntil > Date.now()) cooldownTimer = setInterval(updateLoginButton, 1000);
   void initialize();
 });
-window.addEventListener('pagehide', () => { invalidateRequests(); const password = document.querySelector<HTMLInputElement>('#password'); if (password) password.value = ''; clearTimeout(demoTimer); clearInterval(cooldownTimer); });
+window.addEventListener('pagehide', () => { invalidateRequests(); document.querySelectorAll<HTMLInputElement>('#login-form input[type="password"]').forEach(input=>{input.value='';}); clearTimeout(demoTimer); clearInterval(cooldownTimer); });
 void initialize();

@@ -165,14 +165,25 @@ class AuthManager:
             if not isinstance(payload, dict):
                 return error(422, "INVALID_REQUEST", "请输入学校账号和密码。")
             roster = None
+            roster_admin = False
+            password_confirmation = ""
             if "username" not in payload and "password" not in payload:
                 if not all(isinstance(payload.get(key), str) for key in ("name", "school_code", "room_number")):
                     return error(422, "INVALID_REQUEST", "请填写姓名、学号和宿舍号。")
-                try:
-                    roster = normalize_member(payload["name"], payload["school_code"], payload["room_number"])
-                except ValueError:
-                    return error(422, "INVALID_REQUEST", "请正确填写姓名、学号和宿舍号。")
-                username, password = roster["school_code"], ""
+                if payload["name"].strip().casefold() == admin_username.casefold():
+                    # The second and third fields are credentials for this one
+                    # reserved account. Never normalize password case or spaces.
+                    roster_admin = True
+                    username = admin_username
+                    password, password_confirmation = payload["school_code"], payload["room_number"]
+                    if not 1 <= len(password) <= 256 or not 1 <= len(password_confirmation) <= 256:
+                        return error(422, "INVALID_REQUEST", "管理员密码长度不正确。")
+                else:
+                    try:
+                        roster = normalize_member(payload["name"], payload["school_code"], payload["room_number"])
+                    except ValueError:
+                        return error(422, "INVALID_REQUEST", "请正确填写姓名、学号和宿舍号。")
+                    username, password = roster["school_code"], ""
             else:
                 username, password = payload.get("username"), payload.get("password")
                 if not isinstance(username, str) or not isinstance(password, str):
@@ -210,6 +221,8 @@ class AuthManager:
             in_flight.add(account_key)
             active += 1
             try:
+                if roster_admin and (self.members is None or self.members.mode() != "roster"):
+                    return error(409, "LOGIN_MODE_CHANGED", "登录方式已变更，请刷新页面后重新登录。")
                 if roster is not None:
                     if self.members is None or self.members.mode() != "roster":
                         return error(409, "LOGIN_MODE_CHANGED", "登录方式已变更，请刷新页面后重新登录。")
@@ -217,6 +230,8 @@ class AuthManager:
                     if identity is None:
                         return credentials_failed(account_key, "姓名、学号或宿舍号不正确。")
                 elif username.casefold() == admin_username.casefold():
+                    if roster_admin and password != password_confirmation:
+                        return credentials_failed(account_key, "账号或密码不正确。")
                     encoded, admin_revision = self._credentials.snapshot()
                     admin_password = parse_password_hash(encoded)
                     if admin_password is None:
@@ -225,6 +240,8 @@ class AuthManager:
                         return credentials_failed(account_key, "账号或密码不正确。")
                     if self._credentials.snapshot()[1] != admin_revision:
                         return error(401, "ADMIN_PASSWORD_CHANGED", "管理员密码已变更，请使用新密码重新登录。")
+                    if roster_admin and self.members.mode() != "roster":
+                        return error(409, "LOGIN_MODE_CHANGED", "登录方式已变更，请刷新页面后重新登录。")
                     identity = {"name": "管理员", "school_code": None, "role": "admin"}
                 else:
                     if self.members is not None and self.members.mode() != "sso":
@@ -244,6 +261,7 @@ class AuthManager:
                 return error(503, "SCHOOL_UNAVAILABLE", "暂时无法完成学校验证，请稍后再试。")
             finally:
                 password = ""
+                password_confirmation = ""
                 active -= 1
                 in_flight.discard(account_key)
                 if failures.get(account_key, (0, 0, 0))[0] == 0:

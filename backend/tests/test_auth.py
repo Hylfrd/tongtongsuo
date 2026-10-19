@@ -332,3 +332,45 @@ def test_ip_flood_limit_still_applies_across_distinct_accounts(monkeypatch):
     assert response.json()["detail"]["code"] == "LOGIN_RATE_LIMITED"
     assert response.headers["retry-after"] == "300"
     assert len(calls) == 30
+
+def test_roster_admin_checks_both_raw_password_fields_and_keeps_legacy_login(tmp_path, monkeypatch):
+    password = ' AbCd EfGh 123 ' * 6  # Longer than member IDs; case and spaces matter.
+    monkeypatch.setenv('PUBLIC_ORIGIN', ORIGIN)
+    monkeypatch.setenv('ADMIN_USERNAME', 'cabinet-admin')
+    monkeypatch.setenv('ADMIN_PASSWORD_HASH', create_password_hash(password))
+    clock = [1000.0]
+    monkeypatch.setattr(auth, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+    calls = []
+    async def school(*args):
+        raise AssertionError('Administrator must not use SSO')
+    manager = auth.AuthManager(school, db_path=tmp_path / 'roster-admin.sqlite3')
+    manager.members.set_mode('roster')
+    original_verify = manager.members.verify_roster
+    def member(values):
+        calls.append(values)
+        return original_verify(values)
+    monkeypatch.setattr(manager.members, 'verify_roster', member)
+    application = FastAPI()
+    application.include_router(manager.router)
+    client = TestClient(application, base_url=ORIGIN)
+    def login(first, second, name=' Cabinet-Admin '):
+        return client.post('/api/auth/login', headers=HEADERS,
+                           json={'name': name, 'school_code': first, 'room_number': second})
+    assert login(password, password).json()['user']['role'] == 'admin'
+    assert client.post('/api/auth/logout', headers=HEADERS).status_code == 204
+    for first, second in ((password, 'incorrect'), ('incorrect', password), (password.upper(), password.upper())):
+        response = login(first, second)
+        assert response.status_code == 401
+        assert password not in response.text
+    legacy = {'username': 'cabinet-admin', 'password': password}
+    assert client.post('/api/auth/login', headers=HEADERS, json=legacy).status_code == 429
+    clock[0] += 31
+    assert client.post('/api/auth/login', headers=HEADERS, json=legacy).json()['user']['role'] == 'admin'
+    assert login(password.strip(), password.strip()).status_code == 401
+    assert login(password, password).json()['user']['role'] == 'admin'
+    assert calls == []
+    assert login('123', 'T6-101', name='Student').status_code == 401
+    assert len(calls) == 1
+    manager.members.set_mode('sso')
+    assert login(password, password).status_code == 409
+    assert client.post('/api/auth/login', headers=HEADERS, json=legacy).json()['user']['role'] == 'admin'

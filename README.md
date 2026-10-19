@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Hylfrd/tongtongsuo"><img src="https://img.shields.io/badge/GitHub-repo-007ec6?logo=github" alt="GitHub repository"></a>
+  <a href="https://github.com/Hylfrd/zhengya-sharedtoolbox"><img src="https://img.shields.io/badge/GitHub-repo-007ec6?logo=github" alt="GitHub repository"></a>
 </p>
 
 <p align="center">中文 · <a href="README.en.md">English</a></p>

@@ -98,6 +98,8 @@ cd backend && python -m pytest -q
 | `SERVER_USER` | SSH 登录用户名 |
 | `SERVER_PASSWORD` | SSH 登录密码 |
 
+共享反向代理的安全更新使用 Actions 中的 **Caddy security maintenance**，固定以 Go 1.27.3 重编译 Caddy 2.11.7，并将 `golang.org/x/net` 定向更新至 0.60.0，以覆盖上游发布二进制之后的 Go 与 HTTP/2 安全修复。工作流先验证锁定模块与 `govulncheck`，默认只构建；勾选 `apply_update` 后才更新 Linux 主机。切换前核对原有模块与配置并备份二进制至 `/var/www/tongtongsuo/caddy-security/<run-id>-<attempt>/caddy.previous`；切换后核验实际运行二进制的 SHA256、Go 与 x/net 版本、三个站点的 HTTPS 及共享工具箱原有发布 SHA，失败自动恢复。配置、证书与业务数据不作修改；**CI and deploy → inspect_only** 可只读查看主机与实际依赖版本。
+
 ## 开源协议
 
 AGPL-3.0，详见 [LICENSE](LICENSE)。

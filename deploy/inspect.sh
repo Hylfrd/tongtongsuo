@@ -14,6 +14,13 @@ for command in python3 python3.13 python3.12 caddy nginx systemctl curl; do
   command -v "$command" || true
 done
 python3 --version
+printf '\nUbuntu Python and OpenSSL package versions and cached APT policy:\n'
+if command -v dpkg-query >/dev/null 2>&1; then
+  dpkg-query -W -f='${binary:Package} ${Version}\n' python3.12 libpython3.12-minimal libpython3.12-stdlib openssl libssl3t64 2>/dev/null || true
+fi
+if command -v apt-cache >/dev/null 2>&1; then
+  apt-cache policy python3.12 libpython3.12-minimal libpython3.12-stdlib openssl libssl3t64
+fi
 caddy version 2>/dev/null || true
 caddy build-info 2>/dev/null || true
 printf '\nInstalled Node.js runtime and active Node.js processes:\n'

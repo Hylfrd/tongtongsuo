@@ -14,6 +14,25 @@ for command in python3 python3.13 python3.12 caddy nginx systemctl curl; do
   command -v "$command" || true
 done
 python3 --version
+caddy version 2>/dev/null || true
+printf '\nInstalled application packages:\n'
+if [ -x /var/www/tongtongsuo/current/.venv/bin/python ]; then
+  /var/www/tongtongsuo/current/.venv/bin/python -c '
+from importlib.metadata import distributions
+for package in sorted(distributions(), key=lambda item: item.metadata["Name"].lower()):
+    print(package.metadata["Name"], package.version)
+'
+fi
+printf '\nPHP executables and installed packages:\n'
+for command in php php-fpm frankenphp; do
+  command -v "$command" || true
+done
+if command -v dpkg-query >/dev/null 2>&1; then
+  dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package} ${Version}\n' 'php*' 'frankenphp*' 2>/dev/null | grep '^ii ' || true
+fi
+printf '\nActive PHP services and Caddy PHP modules:\n'
+systemctl list-units --type=service --state=running --no-legend 'php*' 'frankenphp*' 2>/dev/null || true
+caddy list-modules 2>/dev/null | grep -Ei 'php|franken' || true
 if python3 -m venv --help >/dev/null 2>&1; then
   printf 'venv module: available\n'
 fi

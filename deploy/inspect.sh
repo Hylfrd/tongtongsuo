@@ -15,6 +15,21 @@ for command in python3 python3.13 python3.12 caddy nginx systemctl curl; do
 done
 python3 --version
 caddy version 2>/dev/null || true
+caddy build-info 2>/dev/null || true
+printf '\nInstalled Node.js runtime and active Node.js processes:\n'
+for command in node nodejs; do
+  if command -v "$command" >/dev/null 2>&1; then
+    command -v "$command"
+    "$command" --version
+  fi
+done
+ps -C node,nodejs -o pid=,comm= || true
+for pid in $(pgrep -x 'node|nodejs' || true); do
+  if [ -x "/proc/$pid/exe" ]; then
+    printf 'Running Node.js process %s: ' "$pid"
+    "/proc/$pid/exe" --version
+  fi
+done
 printf '\nInstalled application packages:\n'
 if [ -x /var/www/tongtongsuo/current/.venv/bin/python ]; then
   /var/www/tongtongsuo/current/.venv/bin/python -c '

@@ -1,0 +1,93 @@
+name: Caddy security maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply_update:
+        description: Replace the shared Linux Caddy binary after building and scanning
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tongtongsuo-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache-dependency-path: deploy/caddy-security/go.sum
+      - name: Build and scan the fixed Caddy module graph
+        working-directory: deploy/caddy-security
+        env:
+          GOTOOLCHAIN: local
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          go mod verify
+          go build -mod=readonly -trimpath -ldflags '-X github.com/caddyserver/caddy/v2.CustomVersion=v2.11.7' -o ../../caddy github.com/caddyserver/caddy/v2/cmd/caddy
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck -mode binary ../../caddy
+          ../../caddy version
+          ../../caddy build-info
+      - name: Verify maintenance script and checksum
+        run: |
+          bash -n deploy/update-caddy.sh
+          shellcheck deploy/update-caddy.sh
+          sha256sum caddy > caddy.sha256
+          gzip -n -9 caddy
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: caddy-security
+          path: |
+            caddy.gz
+            caddy.sha256
+            deploy/update-caddy.sh
+          retention-days: 7
+
+  update:
+    needs: build
+    if: inputs.apply_update && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: caddy-security
+          path: bundle
+      - name: Upload the verified binary to a private maintenance directory
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+          MAINTENANCE_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          if ! command -v sshpass >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends sshpass
+          fi
+          destination="$SERVER_USER@$SERVER_HOST"
+          remote_dir="/var/www/tongtongsuo/caddy-security/$MAINTENANCE_RUN"
+          options=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
+          timeout 60s sshpass -e ssh "${options[@]}" "$destination" "umask 077; mkdir -p '$remote_dir'; chmod 700 '$remote_dir'"
+          timeout --kill-after=15s 900s sshpass -e scp "${options[@]}" bundle/caddy.gz bundle/caddy.sha256 bundle/deploy/update-caddy.sh "$destination:$remote_dir/"
+      - name: Back up, validate, replace and verify the running Caddy binary
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          MAINTENANCE_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: MAINTENANCE_RUN
+          command_timeout: 12m
+          script: bash "/var/www/tongtongsuo/caddy-security/$MAINTENANCE_RUN/update-caddy.sh" "$MAINTENANCE_RUN"

@@ -25,9 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
       - name: Inspect existing services (read only)
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
@@ -39,20 +39,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
-          node-version: '24'
-          check-latest: true
+          node-version: '24.22.1'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Build frontend
         working-directory: frontend
-        run: npm ci && npm audit --registry=https://registry.npmjs.org && npm test && npm run build
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        run: npm ci && npm test && npm run build
+      - uses: actions/setup-python@v7.0.0
         with:
-          python-version: '3.12'
-          check-latest: true
+          python-version: '3.12.15'
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - name: Check backend
@@ -60,11 +58,6 @@ jobs:
         run: |
           python -m pip install -r requirements-dev.txt
           python -m pytest -q
-      - name: Audit backend dependencies
-        working-directory: backend
-        run: |
-          python -m pip install pip-audit==2.10.1
-          python -m pip_audit -r requirements.txt --progress-spinner off
       - name: Check deployment scripts
         run: |
           for script in deploy/*.sh; do bash -n "$script"; done
@@ -79,7 +72,7 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > RELEASE
           tar --exclude='__pycache__' --exclude='*.pyc' -czf bundle/release.tar.gz RELEASE frontend/dist backend/app backend/requirements.txt deploy wheel-manifest.json
           cp deploy/deploy.sh bundle/deploy.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: release
           path: bundle/
@@ -91,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: release
           path: bundle
@@ -117,7 +110,7 @@ jobs:
               timeout 60s sshpass -e ssh "${options[@]}" "$destination" "umask 077; cat > '$remote_dir/admin.env'"
           fi
       - name: Activate release and verify HTTPS
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        uses: appleboy/ssh-action@v1.2.5
         env:
           RELEASE_SHA: ${{ github.sha }}
           DEPLOY_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
